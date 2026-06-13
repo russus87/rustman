@@ -56,7 +56,7 @@
   }
 
   // Asserzioni (test)
-  const tipiTest = ["status", "tempo", "header", "body", "json", "schema"];
+  const tipiTest = ["status", "tempo", "header", "body", "json", "schema", "snapshot"];
   const operatori = ["==", "!=", "<", ">", "contiene"];
   function usaCampo(tipo) {
     return tipo === "header" || tipo === "json";

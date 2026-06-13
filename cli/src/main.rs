@@ -14,7 +14,7 @@
 
 mod script;
 
-use rustman_core::model::{Nodo, Richiesta, RisultatoTest};
+use rustman_core::model::{Nodo, Richiesta, RisultatoRun, RisultatoTest};
 use rustman_core::{http, storage, test, vars};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -33,11 +33,20 @@ struct Opzioni {
     retry: u32,
     /// Attesa fra i ritentativi, in secondi.
     delay: u64,
+    /// File di output per il report HTML del run.
+    report_html: Option<String>,
+    /// Se true, aggiorna le baseline degli snapshot invece di confrontarle.
+    update_snapshots: bool,
 }
 
 /// Esito dell'esecuzione di una singola richiesta.
 struct Esito {
     nome: String,
+    metodo: String,
+    url: String,
+    status: u16,
+    status_text: String,
+    tempo_ms: u128,
     /// `Some` se la richiesta non è partita (errore di rete/file).
     errore: Option<String>,
     risultati: Vec<RisultatoTest>,
@@ -46,8 +55,14 @@ struct Esito {
 #[tokio::main]
 async fn main() -> ExitCode {
     let argomenti: Vec<String> = std::env::args().skip(1).collect();
-    let opz = match analizza(&argomenti) {
-        Ok(o) => o,
+    let esito = match argomenti.first().map(String::as_str) {
+        Some("run") => analizza(&argomenti).map(EsitoCmd::Run),
+        Some("perf") => analizza_perf(&argomenti).map(EsitoCmd::Perf),
+        Some("coverage") => analizza_coverage(&argomenti).map(EsitoCmd::Coverage),
+        _ => Err("Comando mancante o sconosciuto (usa: run | perf | coverage).".into()),
+    };
+    let cmd = match esito {
+        Ok(c) => c,
         Err(msg) => {
             eprintln!("{msg}\n");
             stampa_uso();
@@ -55,7 +70,12 @@ async fn main() -> ExitCode {
         }
     };
 
-    match esegui(opz).await {
+    let risultato = match cmd {
+        EsitoCmd::Run(o) => esegui(o).await,
+        EsitoCmd::Perf(o) => esegui_perf_cli(o).await,
+        EsitoCmd::Coverage(o) => esegui_coverage_cli(o),
+    };
+    match risultato {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(e) => {
@@ -65,9 +85,20 @@ async fn main() -> ExitCode {
     }
 }
 
+enum EsitoCmd {
+    Run(Opzioni),
+    Perf(OpzioniPerfCli),
+    Coverage(OpzioniCoverage),
+}
+
 fn stampa_uso() {
     eprintln!(
-        "Uso:\n  rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n              [--data <file.csv|file.json>] [--retry <n>] [--delay <s>] [--junit <file>]"
+        "Uso:\n\
+\x20 rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n\
+\x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] [--update-snapshots]\n\
+\x20 rustman perf <workspace> --request <file> [--env <nome>] [--n <N> | --duration <s>] \\\n\
+\x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--max-p95 <ms>] [--max-error <pct>]\n\
+\x20 rustman coverage <workspace> --spec <openapi.yaml|json>"
     );
 }
 
@@ -89,6 +120,8 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
         dati: None,
         retry: 0,
         delay: 2,
+        report_html: None,
+        update_snapshots: false,
     };
     let mut i = 2;
     while i < args.len() {
@@ -106,11 +139,85 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
             "--data" => opz.dati = Some(val()?),
             "--retry" => opz.retry = val()?.parse().map_err(|_| "--retry richiede un numero")?,
             "--delay" => opz.delay = val()?.parse().map_err(|_| "--delay richiede un numero (secondi)")?,
+            "--report-html" => opz.report_html = Some(val()?),
+            "--update-snapshots" => {
+                opz.update_snapshots = true;
+                i += 1; // flag senza valore
+                continue;
+            }
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
     }
     Ok(opz)
+}
+
+/// Opzioni del sottocomando `perf`.
+struct OpzioniPerfCli {
+    workspace: PathBuf,
+    request: String,
+    env: Option<String>,
+    opz: rustman_core::model::OpzioniPerf,
+    max_p95: Option<u128>,
+    max_error_pct: Option<f64>,
+}
+
+fn analizza_perf(args: &[String]) -> Result<OpzioniPerfCli, String> {
+    let workspace = args.get(1).ok_or("Manca il percorso del workspace.")?.into();
+    let mut o = OpzioniPerfCli {
+        workspace,
+        request: String::new(),
+        env: None,
+        opz: rustman_core::model::OpzioniPerf { concorrenza: 10, n: 100, ..Default::default() },
+        max_p95: None,
+        max_error_pct: None,
+    };
+    let mut i = 2;
+    while i < args.len() {
+        let flag = args[i].as_str();
+        let val = || args.get(i + 1).cloned().ok_or_else(|| format!("Manca il valore per {flag}"));
+        let num = || -> Result<u64, String> { val()?.parse().map_err(|_| format!("{flag} richiede un numero")) };
+        match flag {
+            "--request" => o.request = val()?,
+            "--env" => o.env = Some(val()?),
+            "--n" => o.opz.n = num()? as usize,
+            "--concurrency" => o.opz.concorrenza = num()? as usize,
+            "--duration" => o.opz.durata_s = num()?,
+            "--rps" => o.opz.rps = num()?,
+            "--warmup" => o.opz.warmup_s = num()?,
+            "--max-p95" => o.max_p95 = Some(num()? as u128),
+            "--max-error" => o.max_error_pct = Some(val()?.parse().map_err(|_| "--max-error richiede un numero")?),
+            altro => return Err(format!("Opzione sconosciuta: {altro}")),
+        }
+        i += 2;
+    }
+    if o.request.is_empty() {
+        return Err("Indica la richiesta con --request <file>.".into());
+    }
+    Ok(o)
+}
+
+/// Opzioni del sottocomando `coverage`.
+struct OpzioniCoverage {
+    workspace: PathBuf,
+    spec: String,
+}
+
+fn analizza_coverage(args: &[String]) -> Result<OpzioniCoverage, String> {
+    let workspace = args.get(1).ok_or("Manca il percorso del workspace.")?.into();
+    let mut spec = String::new();
+    let mut i = 2;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--spec" => spec = args.get(i + 1).cloned().ok_or("Manca il valore per --spec")?,
+            altro => return Err(format!("Opzione sconosciuta: {altro}")),
+        }
+        i += 2;
+    }
+    if spec.is_empty() {
+        return Err("Indica lo spec con --spec <file>.".into());
+    }
+    Ok(OpzioniCoverage { workspace, spec })
 }
 
 /// Esegue le richieste selezionate. Restituisce `true` se è tutto verde.
@@ -158,7 +265,10 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
             // Applica gli header/auth ereditati dalle cartelle antenate.
             let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
             let req = storage::eredita(root, dir, richiesta);
-            esiti.push(esegui_richiesta(file, &req, &mut variabili, opz.retry, opz.delay).await);
+            esiti.push(
+                esegui_richiesta(root, file, &req, &mut variabili, opz.retry, opz.delay, opz.update_snapshots)
+                    .await,
+            );
         }
     }
 
@@ -167,7 +277,97 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         std::fs::write(path, junit(&esiti)).map_err(|e| e.to_string())?;
         eprintln!("Report JUnit scritto in {path}");
     }
+    if let Some(path) = &opz.report_html {
+        let righe_run: Vec<RisultatoRun> = esiti.iter().map(a_risultato_run).collect();
+        let html = rustman_core::report::genera_html(&righe_run, "Rustman — Report del run");
+        std::fs::write(path, html).map_err(|e| e.to_string())?;
+        eprintln!("Report HTML scritto in {path}");
+    }
     Ok(tutto_ok)
+}
+
+/// Converte un `Esito` nel modello condiviso per il report HTML.
+fn a_risultato_run(e: &Esito) -> RisultatoRun {
+    RisultatoRun {
+        nome: e.nome.clone(),
+        metodo: e.metodo.clone(),
+        url: e.url.clone(),
+        status: e.status,
+        status_text: e.status_text.clone(),
+        tempo_ms: e.tempo_ms,
+        errore: e.errore.clone().unwrap_or_default(),
+        tests: e.risultati.clone(),
+    }
+}
+
+/// Esegue il test di performance su una singola richiesta e applica gli SLO gate.
+async fn esegui_perf_cli(o: OpzioniPerfCli) -> Result<bool, String> {
+    let root = &o.workspace;
+    let variabili = carica_variabili(root, o.env.as_deref())?;
+    let albero = storage::carica_albero(root).map_err(|e| e.to_string())?;
+    let mut per_file = HashMap::new();
+    for c in &albero {
+        raccogli(&c.figli, &mut per_file);
+    }
+    let richiesta = per_file
+        .get(&o.request)
+        .ok_or_else(|| format!("Richiesta non trovata: {}", o.request))?;
+    let req = vars::risolvi(richiesta, &variabili);
+
+    let modo = if o.opz.durata_s > 0 {
+        format!("{}s @ {} conc", o.opz.durata_s, o.opz.concorrenza)
+    } else {
+        format!("{} req @ {} conc", o.opz.n, o.opz.concorrenza)
+    };
+    println!("Perf su '{}' ({modo})…", o.request);
+    let r = rustman_core::perf::esegui_cfg(&req, &o.opz).await;
+
+    println!(
+        "  {} richieste · {} ok · {} errori · {:.1} req/s",
+        r.totali, r.ok, r.errori, r.req_al_secondo
+    );
+    println!(
+        "  latenza min {} · media {:.1} · p50 {} · p90 {} · p95 {} · p99 {} ms",
+        r.latenza_min, r.latenza_media, r.p50, r.p90, r.p95, r.p99
+    );
+
+    let err_pct = if r.totali > 0 { r.errori as f64 / r.totali as f64 * 100.0 } else { 0.0 };
+    let mut ok = true;
+    if let Some(max) = o.max_p95 {
+        if r.p95 > max {
+            println!("  ✗ SLO p95: {} ms > soglia {} ms", r.p95, max);
+            ok = false;
+        }
+    }
+    if let Some(max) = o.max_error_pct {
+        if err_pct > max {
+            println!("  ✗ SLO errori: {err_pct:.2}% > soglia {max}%");
+            ok = false;
+        }
+    }
+    if ok {
+        println!("  ✓ SLO rispettati");
+    }
+    Ok(ok)
+}
+
+/// Calcola e stampa la copertura delle operazioni dello spec OpenAPI.
+fn esegui_coverage_cli(o: OpzioniCoverage) -> Result<bool, String> {
+    let root = &o.workspace;
+    let spec = std::fs::read_to_string(&o.spec).map_err(|e| format!("spec '{}': {e}", o.spec))?;
+    let albero = storage::carica_albero(root).map_err(|e| e.to_string())?;
+    let cov = rustman_core::openapi::coverage(&spec, &albero)
+        .ok_or("Lo spec non è un OpenAPI/Swagger valido")?;
+
+    println!(
+        "Copertura: {}/{} operazioni ({:.0}%)",
+        cov.coperti, cov.totali, cov.percentuale
+    );
+    for s in &cov.scoperti {
+        println!("  ✗ scoperto: {s}");
+    }
+    // In CI consideriamo "verde" solo la copertura totale.
+    Ok(cov.scoperti.is_empty())
 }
 
 /// Costruisce la mappa variabile→valore dall'ambiente con quel nome.
@@ -283,12 +483,15 @@ fn seleziona(
 /// Esegue il pre-script, invia la richiesta (variabili risolte), poi il
 /// post-script; raccoglie le asserzioni native e quelle di `pm.test(...)`.
 /// Con `retry > 0` riprova finché le asserzioni passano (poll-until-condition).
+#[allow(clippy::too_many_arguments)]
 async fn esegui_richiesta(
+    root: &Path,
     file: &str,
     richiesta: &Richiesta,
     variabili: &mut HashMap<String, String>,
     retry: u32,
     delay: u64,
+    update_snapshots: bool,
 ) -> Esito {
     let nome = if richiesta.nome.is_empty() {
         file.to_string()
@@ -312,11 +515,30 @@ async fn esegui_richiesta(
         let r = vars::risolvi(richiesta, variabili);
         match http::invia(&r).await {
             Ok(risposta) => {
+                // Asserzioni native (lo "snapshot" è escluso da test::valuta).
                 let mut risultati = if r.tests.is_empty() {
                     Vec::new()
                 } else {
                     test::valuta(&r.tests, &risposta)
                 };
+                // Snapshot / golden testing: confronto con la baseline su file.
+                for a in r.tests.iter().filter(|a| a.attivo && a.tipo == "snapshot") {
+                    let ignora: Vec<String> = a
+                        .atteso
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let esito = if update_snapshots {
+                        storage::salva_snapshot(root, file, &risposta.body)
+                            .map(|_| ok_test("snapshot aggiornata"))
+                            .unwrap_or_else(|e| ko_test(&e.to_string()))
+                    } else {
+                        storage::valuta_snapshot(root, file, &ignora, &risposta.body)
+                            .unwrap_or_else(|e| ko_test(&e.to_string()))
+                    };
+                    risultati.push(esito);
+                }
                 if !richiesta.post_script.is_empty() {
                     match script::esegui(&richiesta.post_script, variabili, &r, Some(&risposta)) {
                         Ok(es) => {
@@ -330,7 +552,16 @@ async fn esegui_richiesta(
                 let ok = risultati.iter().all(|x| x.passato);
                 if ok || tentativo == tentativi {
                     stampa_esito(&nome, &r, Some(&risposta), &risultati, None);
-                    return Esito { nome, errore: None, risultati };
+                    return Esito {
+                        nome,
+                        metodo: r.metodo.clone(),
+                        url: r.url.clone(),
+                        status: risposta.status,
+                        status_text: risposta.status_text.clone(),
+                        tempo_ms: risposta.tempo_ms,
+                        errore: None,
+                        risultati,
+                    };
                 }
                 eprintln!("  … tentativo {tentativo}/{tentativi} non passato, riprovo tra {delay}s");
             }
@@ -338,15 +569,30 @@ async fn esegui_richiesta(
                 if tentativo == tentativi {
                     let msg = e.to_string();
                     stampa_esito(&nome, &r, None, &[], Some(&msg));
-                    return Esito { nome, errore: Some(msg), risultati: Vec::new() };
+                    return Esito {
+                        nome,
+                        metodo: r.metodo.clone(),
+                        url: r.url.clone(),
+                        status: 0,
+                        status_text: String::new(),
+                        tempo_ms: 0,
+                        errore: Some(msg),
+                        risultati: Vec::new(),
+                    };
                 }
                 eprintln!("  … invio fallito ({e}), riprovo tra {delay}s");
             }
         }
         tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
     }
-    // Irraggiungibile: il loop ritorna sempre all'ultimo tentativo.
-    Esito { nome, errore: Some("nessun tentativo".into()), risultati: Vec::new() }
+    unreachable!("il loop ritorna sempre all'ultimo tentativo")
+}
+
+fn ok_test(det: &str) -> RisultatoTest {
+    RisultatoTest { descrizione: "snapshot".into(), passato: true, dettaglio: det.into() }
+}
+fn ko_test(det: &str) -> RisultatoTest {
+    RisultatoTest { descrizione: "snapshot".into(), passato: false, dettaglio: det.into() }
 }
 
 fn stampa_logs(logs: &[String]) {

@@ -160,6 +160,29 @@
     };
     tabs.push(tab); tabAttivoId = tab.id;
   }
+  // Aggiorna (approva) la baseline dello snapshot della richiesta attiva.
+  async function aggiornaSnapshotAttivo() {
+    const t = tabAttivo;
+    if (!t || t.tipo !== "request" || !t.file || !t.risposta) {
+      logga("errore", "Invia prima una richiesta salvata per aggiornarne lo snapshot");
+      return;
+    }
+    try {
+      await api.aggiornaSnapshot(t.file, t.risposta.body);
+      segnaleGit++;
+      logga("ok", "Snapshot aggiornato (baseline)");
+    } catch (e) { logga("errore", `Aggiorna snapshot fallito: ${e}`); }
+  }
+  // Copertura delle API: incrocia uno spec OpenAPI con le richieste con asserzioni.
+  async function coverageDaSpec(spec, nome) {
+    try {
+      const c = await api.coverageOpenapi(spec);
+      logga(c.scoperti.length === 0 ? "ok" : "info",
+        `Coverage (${nome}): ${c.coperti}/${c.totali} (${c.percentuale.toFixed(0)}%)`);
+      for (const s of c.scoperti) logga("errore", `scoperto: ${s}`);
+    } catch (e) { logga("errore", `Coverage fallita: ${e}`); }
+  }
+
   // Apre l'editor di configurazione ereditabile di una cartella in un tab.
   async function apriConfigCartella(dir, nome) {
     const esistente = tabs.find((t) => t.tipo === "cartella" && t.dir === dir);
@@ -250,6 +273,15 @@
       // Asserzioni dichiarative (backend) + post-script (pm.test).
       let tests = [];
       if (req.tests?.length) tests = await api.valutaTest(req.tests, t.risposta);
+      // Snapshot/golden testing: confronto con baseline (solo richieste salvate).
+      if (t.file) {
+        for (const a of req.tests || []) {
+          if (a.attivo && a.tipo === "snapshot") {
+            const ignora = (a.atteso || "").split(",").map((s) => s.trim()).filter(Boolean);
+            try { tests.push(await api.valutaSnapshot(t.file, ignora, t.risposta)); } catch (e) { console.error(e); }
+          }
+        }
+      }
       const post = eseguiPost(req.post_script, { res: rispostaToRes(t.risposta), vars });
       t.risultatiTest = [...tests, ...post.tests];
       // Log: esito + eventuali messaggi degli script.
@@ -460,6 +492,7 @@
     // Azioni
     out.push({ tag: "⚡", label: "Invia richiesta", hint: "Ctrl+Invio", azione: invia });
     out.push({ tag: "⚡", label: "Genera documentazione", azione: esportaDoc });
+    out.push({ tag: "⚡", label: "Aggiorna snapshot (richiesta attiva)", azione: aggiornaSnapshotAttivo });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
     return out;
   });
@@ -497,6 +530,7 @@
           onTrovaSostituisci={trovaSostituisci}
           onDrift={confrontaDrift}
           onConfigCartella={apriConfigCartella}
+          onCoverage={coverageDaSpec}
         />
       {:else if vista === "run"}
         <RunView {albero} onEsegui={eseguiRun} />

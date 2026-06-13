@@ -15,6 +15,8 @@ thiserror = "2"
 git2 = "0.20"
 # Per eseguire molte richieste in concorrenza nei test di performance.
 futures = "0.3"
+# Runtime async per i test di carico a durata/RPS (spawn, timer, semaforo).
+tokio = { version = "1", features = ["rt", "time", "sync"] }
 # Lettura di spec OpenAPI in formato YAML (oltre al JSON).
 serde_yaml = "0.9"
 

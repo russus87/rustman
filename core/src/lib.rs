@@ -11,6 +11,8 @@ pub mod oauth;
 pub mod openapi;
 pub mod perf;
 pub mod postman;
+pub mod report;
+pub mod snapshot;
 pub mod storage;
 pub mod test;
 pub mod textdiff;

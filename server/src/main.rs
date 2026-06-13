@@ -14,9 +14,10 @@ use axum::{
 use rustman_core::{
     curl, doc, git, http,
     model::{
-        Asserzione, Auth, Catena, ConfigCartella, Environment, Richiesta, Risposta, VoceStoria,
+        Asserzione, Auth, Catena, ConfigCartella, Environment, OpzioniPerf, Richiesta, Risposta,
+        RisultatoRun, VoceStoria,
     },
-    oauth, openapi, perf, storage, test, textdiff, vars,
+    oauth, openapi, perf, report, storage, test, textdiff, vars,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -196,6 +197,34 @@ struct ConfigCartellaReq {
     dir: String,
     config: ConfigCartella,
 }
+#[derive(Deserialize)]
+struct PerfCfgReq {
+    richiesta: Richiesta,
+    opzioni: OpzioniPerf,
+    #[serde(default)]
+    variabili: Option<HashMap<String, String>>,
+}
+#[derive(Deserialize)]
+struct SnapshotReq {
+    file: String,
+    #[serde(default)]
+    ignora: Vec<String>,
+    risposta: Risposta,
+}
+#[derive(Deserialize)]
+struct AggiornaSnapReq {
+    file: String,
+    body: String,
+}
+#[derive(Deserialize)]
+struct CoverageReq {
+    spec: String,
+}
+#[derive(Deserialize)]
+struct ReportReq {
+    esiti: Vec<RisultatoRun>,
+    titolo: String,
+}
 
 // ------------------------------ Handler -------------------------------------
 
@@ -313,6 +342,48 @@ async fn h_salva_config_cartella(
 ) -> Result<Json<()>, Errore> {
     storage::salva_config_cartella(&s.root(), &r.dir, &r.config).map_err(err)?;
     Ok(Json(()))
+}
+
+async fn h_perf_cfg(
+    State(_s): State<Stato>,
+    Json(r): Json<PerfCfgReq>,
+) -> Json<rustman_core::model::RisultatoPerf> {
+    let req = match &r.variabili {
+        Some(v) => vars::risolvi(&r.richiesta, v),
+        None => r.richiesta,
+    };
+    Json(perf::esegui_cfg(&req, &r.opzioni).await)
+}
+
+async fn h_valuta_snapshot(
+    State(s): State<Stato>,
+    Json(r): Json<SnapshotReq>,
+) -> Result<Json<rustman_core::model::RisultatoTest>, Errore> {
+    Ok(Json(
+        storage::valuta_snapshot(&s.root(), &r.file, &r.ignora, &r.risposta.body).map_err(err)?,
+    ))
+}
+
+async fn h_aggiorna_snapshot(
+    State(s): State<Stato>,
+    Json(r): Json<AggiornaSnapReq>,
+) -> Result<Json<()>, Errore> {
+    storage::salva_snapshot(&s.root(), &r.file, &r.body).map_err(err)?;
+    Ok(Json(()))
+}
+
+async fn h_coverage(
+    State(s): State<Stato>,
+    Json(r): Json<CoverageReq>,
+) -> Result<Json<rustman_core::model::CoverageReport>, Errore> {
+    let albero = storage::carica_albero(&s.root()).map_err(err)?;
+    openapi::coverage(&r.spec, &albero)
+        .map(Json)
+        .ok_or_else(|| Errore("spec OpenAPI non valido".into()))
+}
+
+async fn h_genera_report(Json(r): Json<ReportReq>) -> Json<String> {
+    Json(report::genera_html(&r.esiti, &r.titolo))
 }
 
 async fn h_percorso(State(s): State<Stato>) -> Json<String> {
@@ -588,6 +659,11 @@ async fn main() {
         .route("/api/drift_openapi", post(h_drift_openapi))
         .route("/api/carica_config_cartella", post(h_carica_config_cartella))
         .route("/api/salva_config_cartella", post(h_salva_config_cartella))
+        .route("/api/esegui_perf_cfg", post(h_perf_cfg))
+        .route("/api/valuta_snapshot", post(h_valuta_snapshot))
+        .route("/api/aggiorna_snapshot", post(h_aggiorna_snapshot))
+        .route("/api/coverage_openapi", post(h_coverage))
+        .route("/api/genera_report", post(h_genera_report))
         .route("/api/git_stato", post(h_git_stato))
         .route("/api/git_diff", post(h_git_diff))
         .route("/api/git_commit", post(h_git_commit))

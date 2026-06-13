@@ -14,8 +14,9 @@
 use crate::model::{
     Albero, Auth, Catena, CatenaSuDisco, Collezione, ConfigCartella, Environment,
     EnvironmentSuDisco, EsportaCollezione, Header, Nodo, NodoExport, Richiesta, RisultatoImport,
-    Variabile, VoceStoria,
+    RisultatoTest, Variabile, VoceStoria,
 };
+use crate::snapshot;
 use crate::har;
 use crate::openapi;
 use crate::postman::{self, ImportPostman};
@@ -438,6 +439,51 @@ fn sostituisci_in_nodi(root: &Path, figli: &[Nodo], cerca: &str, con: &str) -> i
         }
     }
     Ok(n)
+}
+
+// ===================== Snapshot / golden testing =============================
+
+/// Cartella dove vivono le baseline degli snapshot (committate in git).
+const DIR_SNAP: &str = ".rustman-snapshots";
+
+fn chiave_snap(file: &str) -> String {
+    file.replace('/', "__")
+}
+
+/// Carica la baseline dello snapshot per una richiesta (None se non registrata).
+pub fn carica_snapshot(root: &Path, file: &str) -> Option<String> {
+    fs::read_to_string(root.join(DIR_SNAP).join(chiave_snap(file))).ok()
+}
+
+/// Registra/aggiorna la baseline dello snapshot di una richiesta.
+pub fn salva_snapshot(root: &Path, file: &str, body: &str) -> io::Result<()> {
+    let dir = root.join(DIR_SNAP);
+    fs::create_dir_all(&dir)?;
+    fs::write(dir.join(chiave_snap(file)), body)
+}
+
+/// Valuta lo snapshot: se non c'è baseline la registra (e passa); altrimenti
+/// confronta il body con la baseline ignorando gli `ignora` indicati.
+pub fn valuta_snapshot(
+    root: &Path,
+    file: &str,
+    ignora: &[String],
+    body: &str,
+) -> io::Result<RisultatoTest> {
+    match carica_snapshot(root, file) {
+        None => {
+            salva_snapshot(root, file, body)?;
+            Ok(RisultatoTest {
+                descrizione: "snapshot".into(),
+                passato: true,
+                dettaglio: "baseline registrata".into(),
+            })
+        }
+        Some(base) => {
+            let (ok, det) = snapshot::confronta(&base, body, ignora);
+            Ok(RisultatoTest { descrizione: "snapshot".into(), passato: ok, dettaglio: det })
+        }
+    }
 }
 
 // ===================== Ereditarietà di cartella ==============================

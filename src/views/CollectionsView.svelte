@@ -18,11 +18,19 @@
     onTrovaSostituisci,
     onDrift,
     onConfigCartella,
+    onCoverage,
   } = $props();
 
   let nuovaColl = $state({ attiva: false, nome: "" });
   let fileInput;
   let driftInput;
+  let covInput;
+
+  async function suCovFile(e) {
+    const f = e.target.files?.[0];
+    if (f) await onCoverage?.(await f.text(), f.name);
+    e.target.value = "";
+  }
   let fr = $state({ aperto: false, cerca: "", con: "" });
 
   async function applicaFr() {
@@ -83,8 +91,12 @@
     <span class="side-add" title="Confronto OpenAPI (drift): scegli 2 file" onclick={() => driftInput.click()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h12M8 7l3-3M8 7l3 3M16 17H4M16 17l-3-3M16 17l-3 3"/></svg>
     </span>
+    <span class="side-add" title="Coverage delle API (scegli uno spec OpenAPI)" onclick={() => covInput.click()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    </span>
     <input type="file" accept=".json,application/json" style="display:none" bind:this={fileInput} onchange={suFileImport} />
     <input type="file" accept=".json,.yaml,.yml" multiple style="display:none" bind:this={driftInput} onchange={suDriftFiles} />
+    <input type="file" accept=".json,.yaml,.yml" style="display:none" bind:this={covInput} onchange={suCovFile} />
   </div>
 </div>
 

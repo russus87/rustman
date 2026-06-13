@@ -24,6 +24,9 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Drift detection** fra due spec OpenAPI (endpoint aggiunti/rimossi/modificati).
 - **Find & Replace** su tutte le richieste; **ereditarietà** di header/auth per cartella.
 - **Import HAR** (export di rete del browser).
+- **Snapshot / golden testing** con ignore-paths e approvazione della baseline.
+- **API test coverage** dallo spec OpenAPI; **variabili faker** (`{{$name}}`, `{{$email}}`, …).
+- **Test di carico** a N richieste o a **durata/RPS** con warmup; report e grafici.
 - **Run**: catene di chiamate per gli integration test.
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
@@ -62,7 +65,17 @@ cargo run -p rustman-cli -- run <workspace> [--env <nome>] \
 ```
 Con `--data` esegue un'iterazione per riga del file (run **data-driven**), sostituendo
 le variabili con i valori della riga. Con `--retry N --delay S` riprova una richiesta
-finché le sue asserzioni passano (poll-until-condition).
+finché le sue asserzioni passano (poll-until-condition). `--report-html` genera un
+report navigabile; `--update-snapshots` aggiorna le baseline degli snapshot.
+
+Sottocomandi per la CI:
+```bash
+# test di carico con SLO gate (esce ≠ 0 se la soglia è superata)
+cargo run -p rustman-cli -- perf <workspace> --request demo/get.json \
+  --duration 30 --concurrency 20 --rps 50 --max-p95 200 --max-error 1
+# copertura delle API rispetto a uno spec OpenAPI
+cargo run -p rustman-cli -- coverage <workspace> --spec openapi.yaml
+```
 
 ## Struttura
 - `core/` — logica riutilizzabile (HTTP, storage, git, test, perf, import, doc, diff, script).

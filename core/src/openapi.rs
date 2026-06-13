@@ -11,13 +11,14 @@
 //! - i `$ref` verso `components/schemas` (3.0) e `definitions` (2.0) vengono risolti.
 
 use crate::model::{
-    Asserzione, Auth, CampoForm, DriftReport, Environment, EsportaCollezione, Header, NodoExport,
-    Richiesta, Variabile,
+    Asserzione, Auth, CampoForm, Collezione, CoverageReport, DriftReport, Environment,
+    EsportaCollezione, Header, Nodo, NodoExport, Richiesta, Variabile,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Riconosce e converte uno spec OpenAPI/Swagger. Restituisce la collezione e,
 /// se è stata trovata una base URL, l'ambiente con `base_url`. `None` se il
@@ -55,6 +56,91 @@ pub fn confronta(vecchio: &str, nuovo: &str) -> Option<DriftReport> {
         }
     }
     Some(report)
+}
+
+/// Copertura: quali operazioni dello spec hanno una richiesta con asserzioni.
+pub fn coverage(spec: &str, albero: &[Collezione]) -> Option<CoverageReport> {
+    let ops = endpoints(spec)?;
+    // Chiavi normalizzate delle richieste che hanno almeno un'asserzione.
+    let mut coperte: HashSet<String> = HashSet::new();
+    for c in albero {
+        raccogli_coperte(&c.figli, &mut coperte);
+    }
+    let totali = ops.len();
+    let mut scoperti = Vec::new();
+    let mut coperti = 0;
+    for op in &ops {
+        if coperte.contains(op) {
+            coperti += 1;
+        } else {
+            scoperti.push(op.clone());
+        }
+    }
+    let percentuale = if totali > 0 {
+        (coperti as f64 / totali as f64) * 100.0
+    } else {
+        100.0
+    };
+    Some(CoverageReport { totali, coperti, scoperti, percentuale })
+}
+
+/// Endpoint normalizzati ("METODO /path" con i parametri come `{}`).
+fn endpoints(contenuto: &str) -> Option<Vec<String>> {
+    let spec: Spec = serde_json::from_str(contenuto)
+        .ok()
+        .or_else(|| serde_yaml::from_str(contenuto).ok())?;
+    if spec.openapi.is_empty() && spec.swagger.is_empty() {
+        return None;
+    }
+    let mut out = Vec::new();
+    for (path, item) in &spec.paths {
+        for (metodo, op) in item.operazioni() {
+            if op.is_some() {
+                out.push(format!("{} {}", metodo.to_uppercase(), normalizza_path(path)));
+            }
+        }
+    }
+    Some(out)
+}
+
+fn raccogli_coperte(figli: &[Nodo], out: &mut HashSet<String>) {
+    for n in figli {
+        match n {
+            Nodo::Cartella { figli, .. } => raccogli_coperte(figli, out),
+            Nodo::Richiesta { richiesta, .. } => {
+                if richiesta.tests.iter().any(|t| t.attivo) {
+                    out.insert(format!(
+                        "{} {}",
+                        richiesta.metodo.to_uppercase(),
+                        normalizza_url(&richiesta.url)
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Normalizza un path OpenAPI: "/pets/{petId}" → "/pets/{}".
+fn normalizza_path(path: &str) -> String {
+    path.split('/')
+        .map(|s| if s.starts_with('{') { "{}" } else { s })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Normalizza l'URL di una richiesta a solo path con i parametri come `{}`.
+fn normalizza_url(url: &str) -> String {
+    // Path = dopo l'host (se c'è "://"), oppure dal primo "/".
+    let dopo_host = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    let path = match dopo_host.find('/') {
+        Some(i) => &dopo_host[i..],
+        None => "/",
+    };
+    let path = path.split('?').next().unwrap_or(path);
+    path.split('/')
+        .map(|s| if s.contains("{{") || s.starts_with('{') { "{}" } else { s })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// Mappa "METODO /path" → firma (parametri + presenza corpo) delle operazioni.
@@ -640,6 +726,33 @@ components:
         assert_eq!(richiesta.metodo, "POST");
         assert!(richiesta.body.contains("\"nome\""));
         assert!(richiesta.body.contains("\"id\""));
+    }
+
+    #[test]
+    fn coverage_endpoint_coperti() {
+        use crate::model::{Asserzione, Collezione, Richiesta};
+        let spec = r#"{"openapi":"3.0.0","paths":{
+            "/pets":{"get":{}},
+            "/pets/{petId}":{"get":{}}
+        }}"#;
+        // Una richiesta con asserzione copre GET /pets/{}; l'altra senza no.
+        let r_coperta = Richiesta {
+            metodo: "GET".into(),
+            url: "{{base_url}}/pets/{{id}}".into(),
+            tests: vec![Asserzione {
+                tipo: "status".into(), operatore: "==".into(),
+                campo: String::new(), atteso: "200".into(), attivo: true,
+            }],
+            ..Default::default()
+        };
+        let albero = vec![Collezione {
+            nome: "API".into(), dir: "api".into(),
+            figli: vec![Nodo::Richiesta { nome: "Get".into(), file: "api/get.json".into(), richiesta: r_coperta }],
+        }];
+        let cov = coverage(spec, &albero).unwrap();
+        assert_eq!(cov.totali, 2);
+        assert_eq!(cov.coperti, 1);
+        assert_eq!(cov.scoperti, vec!["GET /pets"]);
     }
 
     #[test]

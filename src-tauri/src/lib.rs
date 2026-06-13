@@ -5,11 +5,12 @@
 use rustman_core::{
     curl, doc, git, http,
     model::{
-        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, DriftReport,
-        Environment, EnvironmentSuDisco, FileModificato, Richiesta, RigaDiff, RisultatoImport,
-        RisultatoPerf, RisultatoTest, Risposta, StatoRepo, VoceStoria,
+        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CoverageReport,
+        DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf, Richiesta,
+        RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta, StatoRepo,
+        VoceStoria,
     },
-    oauth, openapi, perf, storage, test, textdiff, vars,
+    oauth, openapi, perf, report, storage, test, textdiff, vars,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -204,6 +205,53 @@ async fn esegui_perf(
         None => richiesta,
     };
     Ok(perf::esegui(&r, n, concorrenza).await)
+}
+
+/// Test di carico avanzato (durata/RPS/warmup).
+#[tauri::command]
+async fn esegui_perf_cfg(
+    richiesta: Richiesta,
+    opzioni: OpzioniPerf,
+    variabili: Option<HashMap<String, String>>,
+) -> Result<RisultatoPerf, String> {
+    let r = match &variabili {
+        Some(v) => vars::risolvi(&richiesta, v),
+        None => richiesta,
+    };
+    Ok(perf::esegui_cfg(&r, &opzioni).await)
+}
+
+/// Snapshot/golden: registra (prima volta) o confronta il body con la baseline.
+#[tauri::command]
+fn valuta_snapshot(
+    app: tauri::AppHandle,
+    file: String,
+    ignora: Vec<String>,
+    risposta: Risposta,
+) -> Result<RisultatoTest, String> {
+    let root = workspace(&app)?;
+    storage::valuta_snapshot(&root, &file, &ignora, &risposta.body).map_err(|e| e.to_string())
+}
+
+/// Aggiorna (approva) la baseline dello snapshot di una richiesta.
+#[tauri::command]
+fn aggiorna_snapshot(app: tauri::AppHandle, file: String, body: String) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::salva_snapshot(&root, &file, &body).map_err(|e| e.to_string())
+}
+
+/// Copertura delle operazioni di uno spec OpenAPI rispetto alle richieste con asserzioni.
+#[tauri::command]
+fn coverage_openapi(app: tauri::AppHandle, spec: String) -> Result<CoverageReport, String> {
+    let root = workspace(&app)?;
+    let albero = storage::carica_albero(&root).map_err(|e| e.to_string())?;
+    openapi::coverage(&spec, &albero).ok_or_else(|| "spec OpenAPI non valido".to_string())
+}
+
+/// Genera il report HTML di un run a partire dagli esiti.
+#[tauri::command]
+fn genera_report(esiti: Vec<RisultatoRun>, titolo: String) -> String {
+    report::genera_html(&esiti, &titolo)
 }
 
 // ========================= Comandi workspace =========================
@@ -557,8 +605,13 @@ pub fn run() {
             drift_openapi,
             carica_config_cartella,
             salva_config_cartella,
+            valuta_snapshot,
+            aggiorna_snapshot,
+            coverage_openapi,
+            genera_report,
             valuta_test,
             esegui_perf,
+            esegui_perf_cfg,
             lista_workspaces,
             aggiungi_workspace,
             imposta_workspace_attivo,

@@ -2,9 +2,11 @@
 //! concorrenza e calcola le statistiche di latenza.
 
 use crate::http;
-use crate::model::{Richiesta, RisultatoPerf};
+use crate::model::{OpzioniPerf, Richiesta, RisultatoPerf};
 use futures::stream::{self, StreamExt};
-use std::time::Instant;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Semaphore;
 
 /// Esegue `n` richieste con al massimo `concorrenza` in volo contemporaneamente.
 pub async fn esegui(richiesta: &Richiesta, n: usize, concorrenza: usize) -> RisultatoPerf {
@@ -32,6 +34,73 @@ pub async fn esegui(richiesta: &Richiesta, n: usize, concorrenza: usize) -> Risu
     let ok = esiti.iter().filter(|(_, b)| *b).count();
 
     statistiche(latenze, ok, durata_totale_ms)
+}
+
+/// Esegue un test di carico secondo le opzioni: modo "count" (n richieste) o
+/// "durata" (per `durata_s` secondi), con RPS target e warmup opzionali.
+pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPerf {
+    let concorrenza = opz.concorrenza.clamp(1, 256);
+    if opz.durata_s == 0 {
+        // Modo "count": comportamento classico (nessun warmup).
+        return esegui(richiesta, opz.n.max(1), concorrenza).await;
+    }
+
+    // Modo "durata": lancia richieste fino allo scadere di warmup + durata,
+    // limitando i task in volo con un semaforo e (se richiesto) regolando il RPS.
+    let sem = Arc::new(Semaphore::new(concorrenza));
+    let warmup = Duration::from_secs(opz.warmup_s);
+    let fine = Duration::from_secs(opz.warmup_s + opz.durata_s);
+    let intervallo = if opz.rps > 0 {
+        Some(Duration::from_secs_f64(1.0 / opz.rps as f64))
+    } else {
+        None
+    };
+
+    let inizio = Instant::now();
+    let mut prossimo = Instant::now();
+    let mut handles = Vec::new();
+
+    while inizio.elapsed() < fine {
+        // Pacing verso il RPS target.
+        if let Some(iv) = intervallo {
+            let ora = Instant::now();
+            if ora < prossimo {
+                tokio::time::sleep(prossimo - ora).await;
+            }
+            prossimo += iv;
+        }
+        let permesso = sem.clone().acquire_owned().await.unwrap();
+        let r = richiesta.clone();
+        let offset = inizio.elapsed();
+        handles.push(tokio::spawn(async move {
+            let t = Instant::now();
+            let esito = http::invia(&r).await;
+            let lat = t.elapsed().as_millis();
+            let ok = matches!(esito, Ok(rr) if rr.status < 400);
+            drop(permesso);
+            // Le richieste iniziate durante il warmup non contano.
+            if offset >= warmup {
+                Some((lat, ok))
+            } else {
+                None
+            }
+        }));
+    }
+
+    // Attende i task ancora in volo e raccoglie le misure utili.
+    let mut latenze = Vec::new();
+    let mut ok = 0;
+    for h in handles {
+        if let Ok(Some((lat, o))) = h.await {
+            latenze.push(lat);
+            if o {
+                ok += 1;
+            }
+        }
+    }
+    // La finestra di misura è la durata utile (esclusa il warmup).
+    let durata_ms = Duration::from_secs(opz.durata_s).as_millis();
+    statistiche(latenze, ok, durata_ms)
 }
 
 /// Aggrega le latenze in statistiche (separata per poterla testare senza rete).

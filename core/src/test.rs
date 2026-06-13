@@ -7,7 +7,8 @@ use serde_json::Value;
 pub fn valuta(asserzioni: &[Asserzione], risposta: &Risposta) -> Vec<RisultatoTest> {
     asserzioni
         .iter()
-        .filter(|a| a.attivo)
+        // "snapshot" è gestito a parte (serve l'accesso alla baseline su file).
+        .filter(|a| a.attivo && a.tipo != "snapshot")
         .map(|a| valuta_una(a, risposta))
         .collect()
 }

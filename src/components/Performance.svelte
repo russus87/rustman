@@ -7,6 +7,10 @@
 
   let n = $state(50); // numero di richieste
   let concorrenza = $state(10); // richieste in volo contemporaneamente
+  let modo = $state("count"); // count | durata
+  let durataS = $state(10); // durata del test (modo durata)
+  let rps = $state(0); // RPS target (0 = massimo)
+  let warmupS = $state(0); // warmup scartato
   let inCorso = $state(false);
   let errore = $state(null);
   let ris = $state(null); // RisultatoPerf
@@ -16,7 +20,14 @@
     inCorso = true;
     errore = null;
     try {
-      ris = await api.eseguiPerf($state.snapshot(richiesta), Number(n), Number(concorrenza), variabili);
+      const opzioni = {
+        concorrenza: Number(concorrenza),
+        n: Number(n),
+        durata_s: modo === "durata" ? Number(durataS) : 0,
+        rps: Number(rps),
+        warmup_s: Number(warmupS),
+      };
+      ris = await api.eseguiPerfCfg($state.snapshot(richiesta), opzioni, variabili);
     } catch (e) {
       errore = String(e);
       ris = null;
@@ -71,12 +82,20 @@
   <div class="perf-body">
     <!-- Form di configurazione -->
     <div class="perf-form">
-      <label>Richieste
-        <input type="number" min="1" max="5000" bind:value={n} />
+      <label>Modo
+        <select bind:value={modo}>
+          <option value="count">N richieste</option>
+          <option value="durata">Durata</option>
+        </select>
       </label>
-      <label>Concorrenza
-        <input type="number" min="1" max="256" bind:value={concorrenza} />
-      </label>
+      {#if modo === "count"}
+        <label>Richieste<input type="number" min="1" max="50000" bind:value={n} /></label>
+      {:else}
+        <label>Durata (s)<input type="number" min="1" max="3600" bind:value={durataS} /></label>
+        <label>RPS target<input type="number" min="0" max="100000" bind:value={rps} /></label>
+        <label>Warmup (s)<input type="number" min="0" max="600" bind:value={warmupS} /></label>
+      {/if}
+      <label>Concorrenza<input type="number" min="1" max="256" bind:value={concorrenza} /></label>
       <button class="btn btn-send" onclick={esegui} disabled={inCorso}>
         {inCorso ? "In corso…" : "Esegui"}
       </button>
@@ -179,7 +198,8 @@
     color: var(--txt-dim);
     font-size: 12px;
   }
-  .perf-form input {
+  .perf-form input,
+  .perf-form select {
     width: 90px;
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -189,7 +209,8 @@
     font-family: var(--mono);
     outline: none;
   }
-  .perf-form input:focus {
+  .perf-form input:focus,
+  .perf-form select:focus {
     border-color: var(--accent);
   }
   .perc-row {

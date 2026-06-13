@@ -110,9 +110,35 @@ pub fn genera_dinamica(nome: &str) -> Option<String> {
         "$randomInt" => Some((rng_next() % 1000).to_string()),
         "$randomFloat" => Some(format!("{:.6}", (rng_next() % 1_000_000) as f64 / 1_000_000.0)),
         "$randomUUID" | "$guid" => Some(uuid_v4()),
+        "$randomBool" => Some((rng_next() % 2 == 0).to_string()),
+        // Faker: dati di test verosimili.
+        "$firstName" => Some(scegli(NOMI).to_string()),
+        "$lastName" => Some(scegli(COGNOMI).to_string()),
+        "$name" => Some(format!("{} {}", scegli(NOMI), scegli(COGNOMI))),
+        "$email" => Some(format!(
+            "{}.{}@example.com",
+            scegli(NOMI).to_lowercase(),
+            scegli(COGNOMI).to_lowercase()
+        )),
+        "$company" => Some(scegli(AZIENDE).to_string()),
+        "$city" => Some(scegli(CITTA).to_string()),
+        "$word" => Some(scegli(PAROLE).to_string()),
+        "$lorem" => Some((0..8).map(|_| scegli(PAROLE)).collect::<Vec<_>>().join(" ")),
+        "$phone" => Some(format!("+39 3{:02} {:07}", rng_next() % 100, rng_next() % 10_000_000)),
         _ => None,
     }
 }
+
+/// Sceglie un elemento casuale da una lista.
+fn scegli(lista: &[&'static str]) -> &'static str {
+    lista[(rng_next() as usize) % lista.len()]
+}
+
+const NOMI: &[&str] = &["Marco", "Giulia", "Luca", "Anna", "Paolo", "Sara", "Andrea", "Elena", "Davide", "Chiara"];
+const COGNOMI: &[&str] = &["Rossi", "Bianchi", "Ferrari", "Russo", "Esposito", "Romano", "Conti", "Greco"];
+const AZIENDE: &[&str] = &["Acme Srl", "Globex SpA", "Initech", "Umbrella", "Soylent", "Hooli", "Vandelay"];
+const CITTA: &[&str] = &["Roma", "Milano", "Napoli", "Torino", "Bologna", "Firenze", "Genova", "Bari"];
+const PAROLE: &[&str] = &["lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "sed", "tempor"];
 
 /// Elenco (nome, descrizione) delle variabili dinamiche, per la UI.
 pub const VARIABILI_DINAMICHE: &[(&str, &str)] = &[
@@ -121,6 +147,13 @@ pub const VARIABILI_DINAMICHE: &[(&str, &str)] = &[
     ("{{$randomInt}}", "intero casuale 0–999"),
     ("{{$randomFloat}}", "decimale casuale 0–1"),
     ("{{$randomUUID}}", "UUID v4 casuale"),
+    ("{{$randomBool}}", "true/false casuale"),
+    ("{{$name}}", "nome e cognome (faker)"),
+    ("{{$email}}", "email (faker)"),
+    ("{{$company}}", "azienda (faker)"),
+    ("{{$city}}", "città (faker)"),
+    ("{{$lorem}}", "frase lorem ipsum"),
+    ("{{$phone}}", "numero di telefono (faker)"),
 ];
 
 /// Generatore pseudo-casuale (xorshift) seminato da tempo + contatore.

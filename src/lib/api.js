@@ -61,6 +61,15 @@ export const valutaTest = (asserzioni, risposta) =>
 // ---- Performance ----
 export const eseguiPerf = (richiesta, n, concorrenza, variabili) =>
   call("esegui_perf", { richiesta, n, concorrenza, variabili: variabili ?? null });
+export const eseguiPerfCfg = (richiesta, opzioni, variabili) =>
+  call("esegui_perf_cfg", { richiesta, opzioni, variabili: variabili ?? null });
+
+// ---- Snapshot / Coverage / Report ----
+export const valutaSnapshot = (file, ignora, risposta) =>
+  call("valuta_snapshot", { file, ignora, risposta });
+export const aggiornaSnapshot = (file, body) => call("aggiorna_snapshot", { file, body });
+export const coverageOpenapi = (spec) => call("coverage_openapi", { spec });
+export const generaReport = (esiti, titolo) => call("genera_report", { esiti, titolo });
 
 // ---- Collection / cartelle ----
 export const percorsoWorkspace = () => call("percorso_workspace");

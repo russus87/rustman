@@ -45,7 +45,7 @@ pub struct CampoForm {
 }
 
 /// La richiesta HTTP che l'utente vuole inviare (e che salviamo su file).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Richiesta {
     /// Nome leggibile della richiesta (es. "Login"). Usato anche per il nome file.
     #[serde(default)]
@@ -286,6 +286,32 @@ fn versione_uno() -> u32 {
     1
 }
 
+/// Report di copertura: quali operazioni dello spec OpenAPI hanno (o no)
+/// una richiesta con asserzioni.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CoverageReport {
+    pub totali: usize,
+    pub coperti: usize,
+    pub scoperti: Vec<String>,
+    pub percentuale: f64,
+}
+
+/// Esito dell'esecuzione di una richiesta in un run (per il report HTML).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RisultatoRun {
+    pub nome: String,
+    pub metodo: String,
+    pub url: String,
+    pub status: u16,
+    pub status_text: String,
+    pub tempo_ms: u128,
+    /// Messaggio d'errore se l'invio è fallito (vuoto altrimenti).
+    #[serde(default)]
+    pub errore: String,
+    #[serde(default)]
+    pub tests: Vec<RisultatoTest>,
+}
+
 /// Report del confronto fra due spec OpenAPI (drift detection).
 /// Ogni voce è una stringa tipo "GET /pets".
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -397,6 +423,36 @@ pub struct RisultatoPerf {
     pub p99: u128,
     /// Tutte le latenze (ms) in ordine di completamento, per i grafici.
     pub latenze: Vec<u128>,
+}
+
+/// Opzioni di un test di carico. Modo "count" (n richieste) o "durata" (per
+/// `durata_s` secondi), con eventuale RPS target e warmup scartato.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpzioniPerf {
+    #[serde(default = "uno")]
+    pub concorrenza: usize,
+    /// Numero di richieste (modo count). Ignorato se `durata_s > 0`.
+    #[serde(default)]
+    pub n: usize,
+    /// Durata del test in secondi (modo durata). 0 = usa `n`.
+    #[serde(default)]
+    pub durata_s: u64,
+    /// Richieste al secondo target (0 = massimo possibile).
+    #[serde(default)]
+    pub rps: u64,
+    /// Secondi di warmup iniziale, esclusi dalle statistiche.
+    #[serde(default)]
+    pub warmup_s: u64,
+}
+
+fn uno() -> usize {
+    1
+}
+
+impl Default for OpzioniPerf {
+    fn default() -> Self {
+        OpzioniPerf { concorrenza: 1, n: 0, durata_s: 0, rps: 0, warmup_s: 0 }
+    }
 }
 
 // ========================= History / replay =================================
