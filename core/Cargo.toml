@@ -1,0 +1,23 @@
+# Crate "core": tutta la logica riutilizzabile (HTTP ora; git, test, perf in futuro).
+# Non dipende da Tauri, così potrà essere usato anche da un server web.
+[package]
+name = "rustman-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# reqwest con rustls per evitare dipendenze da OpenSSL di sistema.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+thiserror = "2"
+# Integrazione con Git reale (binding di libgit2).
+git2 = "0.20"
+# Per eseguire molte richieste in concorrenza nei test di performance.
+futures = "0.3"
+
+[dev-dependencies]
+# Runtime async usato solo nei test del crate.
+tokio = { version = "1", features = ["macros", "rt"] }
+# Cartelle temporanee per i test di storage e git.
+tempfile = "3"

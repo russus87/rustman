@@ -1,0 +1,293 @@
+//! Modelli dati condivisi tra backend e frontend.
+//! I nomi dei campi sono in italiano e vengono usati così anche dal frontend.
+
+use serde::{Deserialize, Serialize};
+
+/// Una singola intestazione HTTP (chiave/valore) con flag di abilitazione.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Header {
+    pub chiave: String,
+    pub valore: String,
+    /// Se false, l'intestazione viene ignorata all'invio.
+    #[serde(default = "vero")]
+    pub attivo: bool,
+}
+
+/// Valore di default per il campo `attivo` quando manca nel JSON.
+fn vero() -> bool {
+    true
+}
+
+/// La richiesta HTTP che l'utente vuole inviare (e che salviamo su file).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Richiesta {
+    /// Nome leggibile della richiesta (es. "Login"). Usato anche per il nome file.
+    #[serde(default)]
+    pub nome: String,
+    /// Metodo HTTP: GET, POST, PUT, DELETE, ...
+    pub metodo: String,
+    pub url: String,
+    #[serde(default)]
+    pub headers: Vec<Header>,
+    /// Parametri della query string (?chiave=valore). Stesso formato degli header.
+    #[serde(default)]
+    pub params: Vec<Header>,
+    /// Autenticazione (none/bearer/basic).
+    #[serde(default)]
+    pub auth: Auth,
+    /// Corpo grezzo della richiesta (es. testo JSON). Vuoto = nessun corpo.
+    #[serde(default)]
+    pub body: String,
+    /// Asserzioni da verificare sulla risposta (Fase 4).
+    #[serde(default)]
+    pub tests: Vec<Asserzione>,
+    /// Script JavaScript eseguito PRIMA dell'invio (può modificare la richiesta/variabili).
+    #[serde(default)]
+    pub pre_script: String,
+    /// Script JavaScript eseguito DOPO la risposta (test/variabili).
+    #[serde(default)]
+    pub post_script: String,
+}
+
+/// Autenticazione della richiesta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Auth {
+    /// "none" | "bearer" | "basic".
+    #[serde(default = "auth_none")]
+    pub tipo: String,
+    /// Token per il tipo "bearer".
+    #[serde(default)]
+    pub token: String,
+    /// Utente e password per il tipo "basic".
+    #[serde(default)]
+    pub utente: String,
+    #[serde(default)]
+    pub password: String,
+}
+
+fn auth_none() -> String {
+    "none".to_string()
+}
+
+impl Default for Auth {
+    fn default() -> Self {
+        Auth {
+            tipo: auth_none(),
+            token: String::new(),
+            utente: String::new(),
+            password: String::new(),
+        }
+    }
+}
+
+/// La risposta ricevuta dal server, con le metriche utili alla UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Risposta {
+    pub status: u16,
+    pub status_text: String,
+    pub headers: Vec<Header>,
+    pub body: String,
+    /// Durata totale della richiesta in millisecondi.
+    pub tempo_ms: u128,
+    /// Dimensione del corpo della risposta in byte.
+    pub dimensione: usize,
+}
+
+// ======================== Collection su file (Fase 2) ========================
+
+/// Nodo dell'albero di una collezione: una sottocartella o una richiesta.
+/// Serializzato con un campo discriminante `tipo` ("cartella" | "richiesta").
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "tipo", rename_all = "lowercase")]
+pub enum Nodo {
+    Cartella {
+        nome: String,
+        /// Percorso della cartella relativo alla root (es. "test/auth").
+        dir: String,
+        figli: Vec<Nodo>,
+    },
+    Richiesta {
+        nome: String,
+        /// Percorso del file relativo alla root (es. "test/auth/login.json").
+        file: String,
+        richiesta: Richiesta,
+    },
+}
+
+/// Una collezione = una cartella di primo livello, con i suoi figli (cartelle/richieste).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Collezione {
+    pub nome: String,
+    /// Percorso della cartella relativo alla root (es. "User APIs").
+    pub dir: String,
+    pub figli: Vec<Nodo>,
+}
+
+/// L'intero albero del workspace: l'elenco delle collezioni.
+pub type Albero = Vec<Collezione>;
+
+// ===================== Run / catene di chiamate ==============================
+
+/// Un passo di una catena: riferimento a una richiesta (per percorso file).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Passo {
+    pub file: String,
+}
+
+/// Una catena di chiamate da eseguire in sequenza (integration test).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Catena {
+    pub nome: String,
+    #[serde(default)]
+    pub passi: Vec<Passo>,
+}
+
+/// Una catena con il percorso del file da cui è stata caricata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatenaSuDisco {
+    pub file: String,
+    pub catena: Catena,
+}
+
+/// Stato del repository git del workspace (per la vista Git).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatoRepo {
+    pub branch: Option<String>,
+    pub remote: Option<String>,
+    /// Commit locali non ancora inviati (ahead) e remoti non ancora presi (behind).
+    pub ahead: usize,
+    pub behind: usize,
+}
+
+// ===================== Environments / variabili ==============================
+
+/// Una variabile d'ambiente (es. base_url = https://api.example.com).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Variabile {
+    pub chiave: String,
+    pub valore: String,
+}
+
+/// Un ambiente: un insieme di variabili usate per sostituire i {{segnaposto}}.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Environment {
+    pub nome: String,
+    #[serde(default)]
+    pub variabili: Vec<Variabile>,
+}
+
+/// Un ambiente con il percorso del file da cui è stato caricato.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentSuDisco {
+    pub file: String,
+    pub environment: Environment,
+}
+
+// ===================== Import / Export ======================================
+
+/// Nodo dell'albero usato nel formato di esportazione (senza percorsi su disco).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "tipo", rename_all = "lowercase")]
+pub enum NodoExport {
+    Cartella { nome: String, figli: Vec<NodoExport> },
+    Richiesta { richiesta: Richiesta },
+}
+
+/// Formato portabile per esportare/importare una collezione (con le sottocartelle).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EsportaCollezione {
+    /// Versione del formato (per compatibilità futura).
+    #[serde(default = "versione_uno")]
+    pub rustman: u32,
+    pub nome: String,
+    #[serde(default)]
+    pub figli: Vec<NodoExport>,
+}
+
+fn versione_uno() -> u32 {
+    1
+}
+
+// ============================ Git (Fase 3) ===================================
+
+/// Un file con modifiche non ancora committate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileModificato {
+    /// Percorso relativo alla root del workspace.
+    pub file: String,
+    /// Stato: "M" modificato, "A" aggiunto/nuovo, "D" eliminato.
+    pub stato: String,
+}
+
+/// Una singola riga di un diff.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RigaDiff {
+    /// Tipo riga: "ctx" (contesto), "add" (aggiunta), "rem" (rimozione).
+    pub tipo: String,
+    pub testo: String,
+    /// Numero di riga nella versione vecchia (HEAD), se presente.
+    pub vecchia: Option<u32>,
+    /// Numero di riga nella versione nuova (working dir), se presente.
+    pub nuova: Option<u32>,
+}
+
+/// Un commit nella cronologia.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Commit {
+    pub sha: String,
+    pub messaggio: String,
+    pub autore: String,
+    /// Data/ora in formato leggibile.
+    pub quando: String,
+}
+
+// ============================ Test (Fase 4) ==================================
+
+/// Una singola asserzione da verificare sulla risposta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Asserzione {
+    /// Cosa controllare: "status" | "tempo" | "header" | "body" | "json".
+    pub tipo: String,
+    /// Operatore di confronto: "==" | "!=" | "<" | ">" | "contiene".
+    pub operatore: String,
+    /// Per "header" è il nome dell'header; per "json" è il path (es. "data.id");
+    /// per gli altri tipi è vuoto.
+    #[serde(default)]
+    pub campo: String,
+    /// Valore atteso (sempre come stringa).
+    pub atteso: String,
+    #[serde(default = "vero")]
+    pub attivo: bool,
+}
+
+/// Esito della verifica di una singola asserzione.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RisultatoTest {
+    /// Descrizione leggibile dell'asserzione (es. "status == 200").
+    pub descrizione: String,
+    pub passato: bool,
+    /// Dettaglio dell'esito (es. "ottenuto 404").
+    pub dettaglio: String,
+}
+
+// ========================= Performance (Fase 5) ==============================
+
+/// Risultato aggregato di un test di carico.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RisultatoPerf {
+    pub totali: usize,
+    pub ok: usize,
+    pub errori: usize,
+    /// Durata complessiva del test in millisecondi.
+    pub durata_totale_ms: u128,
+    pub req_al_secondo: f64,
+    pub latenza_min: u128,
+    pub latenza_max: u128,
+    pub latenza_media: f64,
+    pub p50: u128,
+    pub p90: u128,
+    pub p95: u128,
+    pub p99: u128,
+    /// Tutte le latenze (ms) in ordine di completamento, per i grafici.
+    pub latenze: Vec<u128>,
+}

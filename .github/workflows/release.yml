@@ -1,0 +1,63 @@
+# Compila e pubblica i pacchetti desktop per Linux, Windows e macOS.
+# Si attiva quando spingi un tag tipo v0.8.0 (oppure manualmente da GitHub).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest      # Mac Apple Silicon
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest      # Mac Intel
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04      # Linux (.deb, .rpm, .AppImage)
+            args: ""
+          - platform: windows-latest    # Windows (.exe NSIS, .msi)
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Dipendenze di sistema (solo Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libsoup-3.0-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Installa dipendenze frontend
+        run: npm install
+
+      - name: Build + bundle + release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Rustman ${{ github.ref_name }}"
+          releaseDraft: true
+          releaseBody: "Pacchetti generati automaticamente."
+          args: ${{ matrix.args }}

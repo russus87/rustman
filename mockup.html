@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<!-- Rustman — mockup UI di una piattaforma di sviluppo API (ispirato a ForgeAPI) -->
+<!-- File unico, nessun build: basta aprirlo nel browser -->
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rustman</title>
+<style>
+/* ====== Variabili colore (tema scuro premium) ====== */
+:root{
+  --bg:#0c0c11;            /* sfondo finestra */
+  --rail:#0a0a0e;          /* barra icone sinistra */
+  --panel:#111118;         /* pannelli */
+  --panel-2:#15151d;       /* pannelli leggermente piu chiari */
+  --panel-3:#1a1a24;       /* hover / campi */
+  --border:#222230;        /* bordi sottili */
+  --border-2:#2a2a3a;
+  --txt:#e7e7ee;           /* testo principale */
+  --txt-dim:#9a9aab;       /* testo secondario */
+  --txt-faint:#5f5f72;     /* testo tenue */
+  --accent:#7c5cff;        /* viola accento */
+  --accent-2:#8b6dff;
+  --green:#3fb950;
+  --green-soft:#2ea043;
+  --red:#f85149;
+  --orange:#e3a008;
+  --blue:#388bfd;
+  --cyan:#39d0d8;
+  --radius:8px;
+  --shadow:0 8px 30px rgba(0,0,0,.45);
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,"Cascadia Code",Menlo,monospace;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--txt);
+  font-family:var(--sans);font-size:13px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#2a2a38;border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#3a3a4c;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ====== Struttura generale ====== */
+.app{display:grid;grid-template-rows:38px 1fr;height:100vh}
+
+/* --- Title bar --- */
+.titlebar{
+  display:flex;align-items:center;gap:14px;
+  background:#0a0a0e;border-bottom:1px solid var(--border);
+  padding:0 14px;user-select:none;
+}
+.traffic{display:flex;gap:8px;align-items:center}
+.dot{width:12px;height:12px;border-radius:50%}
+.dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
+.brand .logo{
+  width:22px;height:22px;border-radius:6px;
+  background:linear-gradient(145deg,#8b6dff,#5b3df0);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.breadcrumb{display:flex;align-items:center;gap:8px;color:var(--txt-dim);font-size:12.5px}
+.breadcrumb .sep{color:var(--txt-faint)}
+.breadcrumb .cur{color:var(--txt)}
+.branch{
+  display:flex;align-items:center;gap:6px;color:var(--txt-dim);
+  padding:4px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;
+}
+.branch:hover{background:var(--panel-3)}
+.tb-spacer{flex:1}
+.tb-icons{display:flex;gap:4px;color:var(--txt-dim)}
+.tb-icons .ib{width:28px;height:24px;display:grid;place-items:center;border-radius:5px;cursor:pointer}
+.tb-icons .ib:hover{background:var(--panel-3);color:var(--txt)}
+
+/* --- Corpo a colonne --- */
+.body{display:grid;grid-template-columns:48px 252px 1fr;min-height:0}
+
+/* --- Rail icone --- */
+.rail{
+  background:var(--rail);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;
+}
+.rail .avatar{
+  width:30px;height:30px;border-radius:8px;margin-bottom:8px;
+  background:linear-gradient(145deg,#8b6dff,#5b3df0);
+  display:grid;place-items:center;color:#fff;font-weight:700;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.rail .ri{
+  width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
+  color:var(--txt-faint);cursor:pointer;position:relative;
+}
+.rail .ri:hover{background:var(--panel-3);color:var(--txt)}
+.rail .ri.active{color:var(--accent-2);background:rgba(124,92,255,.12)}
+.rail .ri.active::before{content:"";position:absolute;left:-8px;width:3px;height:18px;border-radius:3px;background:var(--accent)}
+.rail .grow{flex:1}
+.rail .me{
+  width:30px;height:30px;border-radius:50%;margin-top:6px;
+  background:#1e7a44;display:grid;place-items:center;color:#dfffe9;font-weight:700;
+  border:1px solid #2f9d5b;
+}
+
+/* --- Sidebar --- */
+.sidebar{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.side-head{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 8px}
+.side-title{font-size:11px;font-weight:600;letter-spacing:.8px;color:var(--txt-faint)}
+.side-add{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;color:var(--txt-dim);cursor:pointer}
+.side-add:hover{background:var(--panel-3);color:var(--txt)}
+.ws{display:flex;flex-direction:column;gap:1px;padding:0 8px}
+.ws-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:6px;cursor:pointer;color:var(--txt-dim)}
+.ws-item:hover{background:var(--panel-3)}
+.ws-item.active{background:var(--panel-3);color:var(--txt)}
+.ws-badge{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff}
+.b-violet{background:#6d4dff}.b-teal{background:#1f9b94}.b-amber{background:#b6792a}
+
+.col-head{display:flex;align-items:center;justify-content:space-between;padding:16px 14px 8px}
+.col-tools{display:flex;gap:2px}
+.search{margin:2px 12px 8px;position:relative}
+.search input{
+  width:100%;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:7px;padding:7px 10px 7px 30px;color:var(--txt);font-size:12.5px;outline:none;
+}
+.search input::placeholder{color:var(--txt-faint)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,92,255,.15)}
+.search .si{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--txt-faint)}
+
+.tree{flex:1;overflow-y:auto;padding:2px 8px 12px}
+.folder{display:flex;align-items:center;gap:7px;padding:6px 6px;border-radius:6px;cursor:pointer;color:var(--txt)}
+.folder:hover{background:var(--panel-3)}
+.folder .chev{color:var(--txt-faint);transition:transform .15s}
+.folder.collapsed .chev{transform:rotate(-90deg)}
+.folder .fname{font-weight:500}
+.req{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 30px;border-radius:6px;cursor:pointer;color:var(--txt-dim)}
+.req:hover{background:var(--panel-3)}
+.req.active{background:rgba(124,92,255,.13);color:var(--txt)}
+.req.active::before{content:"";position:absolute}
+.req .m{font-size:10.5px;font-weight:700;width:42px;letter-spacing:.3px}
+.m.get{color:var(--green)}.m.post{color:#d9a441}.m.put{color:var(--blue)}.m.del{color:var(--red)}
+.req .rname{font-size:12.5px}
+.children{display:flex;flex-direction:column;gap:1px;position:relative}
+.children::before{content:"";position:absolute;left:14px;top:2px;bottom:6px;width:1px;background:var(--border)}
+
+/* ====== Centro: editor + git ====== */
+.center{display:grid;grid-template-columns:1fr 470px;min-height:0;background:var(--bg)}
+.editor-col{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--border)}
+
+/* Tab dei request aperti */
+.req-tabs{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:var(--panel);padding-right:14px}
+.rt{display:flex;align-items:center;gap:9px;padding:11px 16px;border-right:1px solid var(--border);cursor:pointer;color:var(--txt-dim);position:relative}
+.rt.active{color:var(--txt);background:var(--bg)}
+.rt.active::after{content:"";position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--accent)}
+.rt .m{font-size:11px;font-weight:700}
+.rt .dot-unsaved{width:7px;height:7px;border-radius:50%;background:#d9a441}
+.rt .x{color:var(--txt-faint);width:16px;height:16px;display:grid;place-items:center;border-radius:4px}
+.rt .x:hover{background:var(--panel-3);color:var(--txt)}
+.rt-add{padding:0 14px;color:var(--txt-faint);cursor:pointer}
+.rt-add:hover{color:var(--txt)}
+.rt-spacer{flex:1}
+.env{
+  display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:7px;padding:6px 12px;color:var(--txt);cursor:pointer;font-size:12.5px;margin:7px 0;
+}
+.env .gd{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(63,185,80,.6)}
+.env:hover{border-color:var(--border-2)}
+.head-icons{display:flex;gap:4px;color:var(--txt-dim);margin-left:6px}
+.head-icons .ib{width:30px;height:30px;display:grid;place-items:center;border-radius:7px;cursor:pointer}
+.head-icons .ib:hover{background:var(--panel-3);color:var(--txt)}
+
+/* Barra URL */
+.urlbar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.method-sel{
+  display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:8px;padding:9px 12px;min-width:108px;cursor:pointer;
+}
+.method-sel .m{font-weight:700;font-size:13px}
+.method-sel .cd{margin-left:auto;color:var(--txt-faint)}
+.url-input{
+  flex:1;display:flex;align-items:center;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:8px;padding:0 12px;
+}
+.url-input input{flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:var(--mono);font-size:13px;padding:10px 0}
+.url-input input::selection{background:rgba(124,92,255,.35)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:8px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px}
+.btn-send{background:linear-gradient(145deg,#8b6dff,#6c47ff);color:#fff;box-shadow:0 2px 12px rgba(108,71,255,.35)}
+.btn-send:hover{filter:brightness(1.08)}
+.btn-split{display:flex;align-items:stretch;border-radius:8px;overflow:hidden}
+.btn-split .main{border-radius:8px 0 0 8px}
+.btn-split .caret{background:#6c47ff;color:#fff;display:grid;place-items:center;width:30px;cursor:pointer;border-left:1px solid rgba(255,255,255,.15)}
+.btn-save{background:var(--panel-3);color:var(--txt);border:1px solid var(--border-2)}
+.btn-save:hover{background:#22222e}
+.icon-btn{width:38px;height:38px;border-radius:8px;background:var(--panel-3);border:1px solid var(--border-2);display:grid;place-items:center;color:var(--txt-dim);cursor:pointer}
+.icon-btn:hover{color:var(--txt)}
+.more{color:var(--txt-dim);cursor:pointer;padding:0 6px}
+
+/* Tab editor (Params/Headers/...) */
+.etabs{display:flex;align-items:center;gap:2px;padding:0 14px;border-bottom:1px solid var(--border)}
+.etab{padding:12px 14px;color:var(--txt-dim);cursor:pointer;position:relative;display:flex;align-items:center;gap:7px;font-size:13px}
+.etab:hover{color:var(--txt)}
+.etab.active{color:var(--txt)}
+.etab.active::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px}
+.etab .pin{width:6px;height:6px;border-radius:50%;background:var(--green)}
+
+/* Tipo body */
+.body-type{display:flex;align-items:center;gap:18px;padding:11px 16px;border-bottom:1px solid var(--border);color:var(--txt-dim);font-size:12.5px}
+.radio{display:flex;align-items:center;gap:7px;cursor:pointer}
+.radio .rc{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--txt-faint);display:grid;place-items:center}
+.radio.on .rc{border-color:var(--accent)}
+.radio.on .rc::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.radio.on{color:var(--txt)}
+.bt-spacer{flex:1}
+.mini-sel{display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:4px 9px;color:var(--txt);cursor:pointer;font-size:12px}
+
+/* Editor codice */
+.code-wrap{flex:1;position:relative;overflow:auto;background:var(--bg)}
+.code-top{position:absolute;top:10px;right:16px;display:flex;gap:14px;align-items:center;z-index:2}
+.beautify{color:var(--accent-2);cursor:pointer;font-size:12.5px;font-weight:500}
+.expand{color:var(--txt-faint);cursor:pointer}
+.code{display:flex;font-family:var(--mono);font-size:13px;line-height:1.7;padding:14px 0}
+.gutter{user-select:none;text-align:right;color:var(--txt-faint);padding:0 14px;min-width:46px}
+.lines{flex:1;white-space:pre;padding-right:20px}
+.k{color:#79c0ff}        /* chiavi */
+.s{color:#7ee787}        /* stringhe */
+.n{color:#f0a35e}        /* numeri */
+.bo{color:#d2a8ff}       /* booleani */
+.p{color:#8b8b9e}        /* punteggiatura */
+
+/* ====== Git panel (in basso a sinistra del centro) ====== */
+.git-panel{border-top:1px solid var(--border);background:var(--panel);display:grid;grid-template-rows:auto 1fr;min-height:0}
+.git-tabs{display:flex;gap:0;padding:0 4px;border-bottom:1px solid var(--border)}
+.gtab{padding:11px 14px;color:var(--txt-dim);cursor:pointer;font-size:12.5px;position:relative}
+.gtab.active{color:var(--txt)}
+.gtab.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;background:var(--accent)}
+.git-body{display:grid;grid-template-columns:240px 1fr;min-height:0}
+.changes{border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.changes-head{padding:14px 14px 8px;font-weight:600;font-size:13px}
+.changes-head .ct{color:var(--txt-faint);font-weight:400;margin-left:4px}
+.chg-list{flex:1;overflow-y:auto;padding:0 8px}
+.chg{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:6px;cursor:pointer}
+.chg:hover{background:var(--panel-3)}
+.chk{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--border-2);display:grid;place-items:center;flex-shrink:0}
+.chk.on{background:var(--accent);border-color:var(--accent)}
+.chk.on svg{display:block}
+.chk svg{display:none}
+.chg .fn{flex:1;font-size:12.5px;color:var(--txt);font-family:var(--mono)}
+.chg.off .fn{color:var(--txt-dim)}
+.st{font-size:11px;font-weight:700;width:14px;text-align:center}
+.st.m{color:var(--orange)}.st.a{color:var(--green)}.st.d{color:var(--red)}
+.commit-box{border-top:1px solid var(--border);padding:12px 14px}
+.commit-box label{display:block;color:var(--txt-faint);font-size:11px;margin-bottom:7px}
+.commit-box textarea{
+  width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;
+  color:var(--txt);font-family:var(--sans);font-size:12.5px;padding:9px 11px;resize:none;height:60px;outline:none;
+}
+.commit-box textarea:focus{border-color:var(--accent)}
+.commit-btn{display:flex;margin-top:10px;border-radius:8px;overflow:hidden}
+.commit-btn .main{flex:1;background:linear-gradient(145deg,#8b6dff,#6c47ff);color:#fff;border:none;padding:10px;font-weight:600;cursor:pointer}
+.commit-btn .caret{width:34px;background:#6c47ff;color:#fff;display:grid;place-items:center;cursor:pointer;border-left:1px solid rgba(255,255,255,.15)}
+
+/* Diff viewer */
+.diff{display:flex;flex-direction:column;min-height:0}
+.diff-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.diff-file{display:flex;align-items:center;gap:7px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-family:var(--mono);font-size:12px;cursor:pointer}
+.diff-spacer{flex:1}
+.view-toggle{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.view-toggle .vt{width:30px;height:26px;display:grid;place-items:center;color:var(--txt-faint);cursor:pointer;background:var(--panel-2)}
+.view-toggle .vt.on{background:var(--panel-3);color:var(--txt)}
+.diff-cols{flex:1;display:grid;grid-template-columns:1fr 1fr;overflow:auto;min-height:0;font-family:var(--mono);font-size:12px}
+.diff-side{border-right:1px solid var(--border)}
+.diff-side:last-child{border-right:none}
+.diff-bar{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;color:var(--txt-dim);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel);font-size:11.5px}
+.diff-bar .sha{color:var(--txt-faint)}
+.drow{display:flex;line-height:1.65}
+.drow .ln{width:34px;text-align:right;padding-right:10px;color:var(--txt-faint);user-select:none;flex-shrink:0}
+.drow .ct{padding:0 10px;white-space:pre;flex:1}
+.drow.rem{background:rgba(248,81,73,.12)}
+.drow.rem .ln{background:rgba(248,81,73,.18);color:#f8918c}
+.drow.add{background:rgba(63,185,80,.13)}
+.drow.add .ln{background:rgba(63,185,80,.2);color:#7ee08a}
+.drow.add .ct::before{content:"+ ";color:var(--green)}
+
+/* ====== Pannello destro: Response + Performance ====== */
+.right{display:grid;grid-template-rows:1fr 1fr;min-height:0;background:var(--panel)}
+.response{display:flex;flex-direction:column;min-height:0;border-bottom:1px solid var(--border)}
+.resp-head{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border)}
+.resp-head .ttl{font-weight:600;font-size:14px}
+.resp-spacer{flex:1}
+.badge{padding:3px 9px;border-radius:6px;font-size:11.5px;font-weight:700;font-family:var(--mono)}
+.badge.ok{background:rgba(63,185,80,.15);color:#56d364;border:1px solid rgba(63,185,80,.3)}
+.resp-meta{color:var(--txt-dim);font-size:12.5px;font-family:var(--mono)}
+.resp-tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--border)}
+.rsp-tab{padding:11px 12px;color:var(--txt-dim);cursor:pointer;position:relative;font-size:12.5px}
+.rsp-tab.active{color:var(--txt)}
+.rsp-tab.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;background:var(--accent)}
+.rsp-tab .cnt{color:var(--txt-faint)}
+.rsp-sub{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid var(--border)}
+.pill-group{display:flex;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;padding:2px}
+.pill{padding:4px 12px;border-radius:5px;color:var(--txt-dim);cursor:pointer;font-size:12px}
+.pill.on{background:var(--panel-3);color:var(--txt)}
+.rsp-sub .sp{flex:1}
+.rsp-icon{width:28px;height:26px;display:grid;place-items:center;color:var(--txt-faint);cursor:pointer;border-radius:6px}
+.rsp-icon:hover{background:var(--panel-3);color:var(--txt)}
+.resp-code{flex:1;overflow:auto;background:var(--bg)}
+
+/* Performance */
+.perf{display:flex;flex-direction:column;min-height:0}
+.perf-tabs{display:flex;gap:4px;padding:0 16px;border-bottom:1px solid var(--border)}
+.ptab{padding:12px 6px;color:var(--txt-dim);cursor:pointer;position:relative;font-size:13px}
+.ptab.active{color:var(--txt)}
+.ptab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent)}
+.perf-body{flex:1;overflow-y:auto;padding:14px 16px}
+.perf-row1{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.perf-row1 .name{font-weight:600;font-size:13px}
+.tag-ok{display:inline-flex;align-items:center;gap:5px;color:#56d364;font-size:12px}
+.perf-row1 .when{margin-left:auto;color:var(--txt-faint);font-size:12px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px}
+.kpi{background:var(--panel);padding:11px 13px}
+.kpi .lbl{color:var(--txt-faint);font-size:11px;margin-bottom:5px}
+.kpi .val{font-size:15px;font-weight:600}
+.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.metric{background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:12px}
+.metric .ml{color:var(--txt-dim);font-size:12px;margin-bottom:8px}
+.metric .mv{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.metric .mv small{font-size:12px;font-weight:500;color:var(--txt-faint);margin-left:4px}
+.spark{margin-top:8px;height:30px;width:100%}
+.chart-tabs{display:flex;gap:18px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.ctab{padding:8px 0;color:var(--txt-dim);cursor:pointer;position:relative;font-size:12.5px}
+.ctab.active{color:var(--txt)}
+.ctab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent)}
+.big-chart{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 8px 4px}
+.axis{font-family:var(--mono);font-size:10px;fill:var(--txt-faint)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ TITLE BAR ============ -->
+  <div class="titlebar">
+    <div class="traffic"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+    <div class="brand"><span class="logo">R</span>Rustman</div>
+    <div class="breadcrumb" style="margin-left:18px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+      <span>My Workspace</span><span class="sep">›</span><span>User APIs</span><span class="sep">›</span><span class="cur">Login</span>
+    </div>
+    <div class="branch" style="margin-left:14px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8M6 9v6"/></svg>
+      main
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-icons">
+      <div class="ib"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M9 7h8v8"/></svg></div>
+      <div class="ib"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></div>
+      <div class="ib"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- ============ RAIL ICONE ============ -->
+    <div class="rail">
+      <div class="avatar">R</div>
+      <div class="ri active" title="API">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+      </div>
+      <div class="ri" title="Cerca"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div>
+      <div class="ri" title="Git"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8M6 9v6"/></svg></div>
+      <div class="ri" title="Run"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9z"/></svg></div>
+      <div class="ri" title="Metriche"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-5 3 3 5-7"/></svg></div>
+      <div class="ri" title="Database"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></div>
+      <div class="ri" title="Impostazioni"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.3l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2.2-1.3l-.3-2.5H10l-.3 2.5a7 7 0 0 0-2.2 1.3l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .9.1 1.3l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2.2 1.3l.3 2.5h4l.3-2.5a7 7 0 0 0 2.2-1.3l2.3 1 2-3.4-2-1.5c.1-.4.1-.9.1-1.3z"/></svg></div>
+      <div class="grow"></div>
+      <div class="ri" title="Aiuto"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg></div>
+      <div class="me">A</div>
+    </div>
+
+    <!-- ============ SIDEBAR ============ -->
+    <div class="sidebar">
+      <div class="side-head">
+        <span class="side-title">WORKSPACES</span>
+        <span class="side-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+      <div class="ws">
+        <div class="ws-item active"><span class="ws-badge b-violet">M</span>My Workspace</div>
+        <div class="ws-item"><span class="ws-badge b-teal">T</span>Team Workspace</div>
+        <div class="ws-item"><span class="ws-badge b-amber">S</span>Shared APIs</div>
+      </div>
+
+      <div class="col-head">
+        <span class="side-title">COLLECTIONS</span>
+        <div class="col-tools">
+          <span class="side-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="side-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"/></svg></span>
+        </div>
+      </div>
+      <div class="search">
+        <span class="si"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
+        <input placeholder="Search collections">
+      </div>
+
+      <div class="tree">
+        <!-- User APIs -->
+        <div class="folder" onclick="this.nextElementSibling.style.display=this.classList.toggle('collapsed')?'none':'flex'">
+          <span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg></span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="fname">User APIs</span>
+        </div>
+        <div class="children">
+          <div class="req active" style="position:relative"><span class="m post">POST</span><span class="rname">Login</span></div>
+          <div class="req"><span class="m post">POST</span><span class="rname">Logout</span></div>
+          <div class="req"><span class="m get">GET</span><span class="rname">Profile</span></div>
+          <div class="req"><span class="m put">PUT</span><span class="rname">Update Profile</span></div>
+          <div class="req"><span class="m del">DELETE</span><span class="rname">Delete Profile</span></div>
+        </div>
+
+        <!-- Admin APIs -->
+        <div class="folder" style="margin-top:2px" onclick="this.nextElementSibling.style.display=this.classList.toggle('collapsed')?'none':'flex'">
+          <span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg></span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="fname">Admin APIs</span>
+        </div>
+        <div class="children">
+          <div class="req"><span class="m get">GET</span><span class="rname">Users</span></div>
+          <div class="req"><span class="m post">POST</span><span class="rname">Create User</span></div>
+          <div class="req"><span class="m put">PUT</span><span class="rname">Update User</span></div>
+          <div class="req"><span class="m del">DELETE</span><span class="rname">Delete User</span></div>
+        </div>
+
+        <!-- System APIs (collassata) -->
+        <div class="folder collapsed" style="margin-top:2px" onclick="this.nextElementSibling.style.display=this.classList.toggle('collapsed')?'none':'flex'">
+          <span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg></span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="fname">System APIs</span>
+        </div>
+        <div class="children" style="display:none"></div>
+
+        <!-- Reports APIs (collassata) -->
+        <div class="folder collapsed" style="margin-top:2px" onclick="this.nextElementSibling.style.display=this.classList.toggle('collapsed')?'none':'flex'">
+          <span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg></span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="fname">Reports APIs</span>
+        </div>
+        <div class="children" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ============ CENTRO ============ -->
+    <div class="center">
+
+      <!-- Colonna editor + git -->
+      <div class="editor-col">
+
+        <!-- Tab request aperti -->
+        <div class="req-tabs">
+          <div class="rt active">
+            <span class="m post" style="color:#d9a441">POST</span><span>Login</span>
+            <span class="dot-unsaved"></span>
+            <span class="x"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+          </div>
+          <div class="rt-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
+          <div class="rt-spacer"></div>
+          <div class="env"><span class="gd"></span>Development <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+          <div class="head-icons">
+            <div class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4l4 4m-9 9l-5 1 1-5 9-9 4 4z"/></svg></div>
+            <div class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+            <div class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.3l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2.2-1.3l-.3-2.5H10l-.3 2.5a7 7 0 0 0-2.2 1.3l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .9.1 1.3l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2.2 1.3l.3 2.5h4l.3-2.5a7 7 0 0 0 2.2-1.3l2.3 1 2-3.4-2-1.5z"/></svg></div>
+          </div>
+        </div>
+
+        <!-- Barra URL -->
+        <div class="urlbar">
+          <div class="method-sel"><span class="m post" style="color:#d9a441">POST</span><span class="cd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+          <div class="url-input"><input value="https://api.example.com/auth/login" spellcheck="false"></div>
+          <div class="btn-split">
+            <button class="btn btn-send main"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>Send</button>
+            <div class="caret"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+          </div>
+          <button class="btn btn-save"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save</button>
+          <div class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></div>
+          <div class="more"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></div>
+        </div>
+
+        <!-- Tab editor -->
+        <div class="etabs">
+          <div class="etab">Params</div>
+          <div class="etab">Headers <span class="pin"></span></div>
+          <div class="etab active">Body <span class="pin"></span></div>
+          <div class="etab">Auth</div>
+          <div class="etab">Tests</div>
+          <div class="etab">Performance</div>
+        </div>
+
+        <!-- Tipo body -->
+        <div class="body-type">
+          <span class="radio"><span class="rc"></span>none</span>
+          <span class="radio"><span class="rc"></span>form-data</span>
+          <span class="radio"><span class="rc"></span>x-www-form-urlencoded</span>
+          <span class="radio on"><span class="rc"></span>raw</span>
+          <span class="radio"><span class="rc"></span>binary</span>
+          <span class="bt-spacer"></span>
+          <span class="mini-sel">JSON <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+        </div>
+
+        <!-- Editor codice -->
+        <div class="code-wrap">
+          <div class="code-top">
+            <span class="beautify">Beautify</span>
+            <span class="expand"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>
+          </div>
+          <div class="code">
+            <div class="gutter">1<br>2<br>3<br>4<br>5</div>
+<div class="lines"><span class="p">{</span>
+  <span class="k">"username"</span><span class="p">:</span> <span class="s">"admin"</span><span class="p">,</span>
+  <span class="k">"password"</span><span class="p">:</span> <span class="s">"P@ssw0rd123"</span><span class="p">,</span>
+  <span class="k">"remember"</span><span class="p">:</span> <span class="bo">true</span>
+<span class="p">}</span></div>
+          </div>
+        </div>
+
+        <!-- ===== GIT PANEL ===== -->
+        <div class="git-panel">
+          <div class="git-tabs">
+            <div class="gtab active">Git</div>
+            <div class="gtab">History</div>
+            <div class="gtab">Branches</div>
+          </div>
+          <div class="git-body">
+            <!-- Changes + commit -->
+            <div class="changes">
+              <div class="changes-head">Changes <span class="ct">(5)</span></div>
+              <div class="chg-list">
+                <div class="chg"><span class="chk on"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg></span><span class="fn">login.json</span><span class="st m">M</span></div>
+                <div class="chg"><span class="chk on"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg></span><span class="fn">profile.json</span><span class="st m">M</span></div>
+                <div class="chg"><span class="chk on"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg></span><span class="fn">env.development.json</span><span class="st m">M</span></div>
+                <div class="chg off"><span class="chk"><svg width="10" height="10"></svg></span><span class="fn">user-create.json</span><span class="st a">A</span></div>
+                <div class="chg off"><span class="chk"><svg width="10" height="10"></svg></span><span class="fn">README.md</span><span class="st d">D</span></div>
+              </div>
+              <div class="commit-box">
+                <label>Commit message</label>
+                <textarea spellcheck="false">Update login endpoint and request body</textarea>
+                <div class="commit-btn">
+                  <button class="main">Commit</button>
+                  <div class="caret"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Diff viewer -->
+            <div class="diff">
+              <div class="diff-head">
+                <div class="diff-file">login.json <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+                <div class="diff-spacer"></div>
+                <div class="view-toggle">
+                  <div class="vt on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg></div>
+                  <div class="vt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="8" rx="1"/><rect x="4" y="13" width="16" height="8" rx="1"/></svg></div>
+                </div>
+                <div class="mini-sel">Split <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+              </div>
+              <div class="diff-cols">
+                <!-- main -->
+                <div class="diff-side">
+                  <div class="diff-bar"><span>main</span><span class="sha">a1b2c3d</span></div>
+                  <div class="drow"><span class="ln">1</span><span class="ct"><span class="p">{</span></span></div>
+                  <div class="drow"><span class="ln">2</span><span class="ct">  <span class="k">"method"</span><span class="p">:</span> <span class="s">"POST"</span><span class="p">,</span></span></div>
+                  <div class="drow rem"><span class="ln">3</span><span class="ct">  <span class="k">"url"</span><span class="p">:</span> <span class="s">"http://localhost:8080/auth/login"</span><span class="p">,</span></span></div>
+                  <div class="drow"><span class="ln">4</span><span class="ct">  <span class="k">"headers"</span><span class="p">:</span> <span class="p">{</span></span></div>
+                  <div class="drow"><span class="ln">5</span><span class="ct">    <span class="k">"Content-Type"</span><span class="p">:</span> <span class="s">"application/json"</span></span></div>
+                  <div class="drow"><span class="ln">6</span><span class="ct">  <span class="p">},</span></span></div>
+                  <div class="drow"><span class="ln">7</span><span class="ct">  <span class="k">"body"</span><span class="p">:</span> <span class="p">{</span></span></div>
+                  <div class="drow"><span class="ln">8</span><span class="ct">    <span class="k">"username"</span><span class="p">:</span> <span class="s">"admin"</span><span class="p">,</span></span></div>
+                  <div class="drow"><span class="ln">9</span><span class="ct">    <span class="k">"password"</span><span class="p">:</span> <span class="s">"password"</span></span></div>
+                  <div class="drow"><span class="ln">10</span><span class="ct">  <span class="p">}</span></span></div>
+                  <div class="drow"><span class="ln">11</span><span class="ct"><span class="p">}</span></span></div>
+                </div>
+                <!-- working dir -->
+                <div class="diff-side">
+                  <div class="diff-bar"><span>Working Directory</span><span class="sha"></span></div>
+                  <div class="drow"><span class="ln">1</span><span class="ct"><span class="p">{</span></span></div>
+                  <div class="drow"><span class="ln">2</span><span class="ct">  <span class="k">"method"</span><span class="p">:</span> <span class="s">"POST"</span><span class="p">,</span></span></div>
+                  <div class="drow add"><span class="ln">3</span><span class="ct"><span class="k">"url"</span><span class="p">:</span> <span class="s">"https://api.example.com/auth/lo…"</span><span class="p">,</span></span></div>
+                  <div class="drow"><span class="ln">4</span><span class="ct">  <span class="k">"headers"</span><span class="p">:</span> <span class="p">{</span></span></div>
+                  <div class="drow"><span class="ln">5</span><span class="ct">    <span class="k">"Content-Type"</span><span class="p">:</span> <span class="s">"application/json"</span><span class="p">,</span></span></div>
+                  <div class="drow add"><span class="ln">6</span><span class="ct"><span class="k">"X-Client"</span><span class="p">:</span> <span class="s">"Rustman"</span></span></div>
+                  <div class="drow"><span class="ln">7</span><span class="ct">  <span class="p">},</span></span></div>
+                  <div class="drow"><span class="ln">8</span><span class="ct">  <span class="k">"body"</span><span class="p">:</span> <span class="p">{</span></span></div>
+                  <div class="drow"><span class="ln">9</span><span class="ct">    <span class="k">"username"</span><span class="p">:</span> <span class="s">"admin"</span><span class="p">,</span></span></div>
+                  <div class="drow add"><span class="ln">10</span><span class="ct"><span class="k">"password"</span><span class="p">:</span> <span class="s">"P@ssw0rd123"</span><span class="p">,</span></span></div>
+                  <div class="drow add"><span class="ln">11</span><span class="ct"><span class="k">"remember"</span><span class="p">:</span> <span class="bo">true</span></span></div>
+                  <div class="drow"><span class="ln">12</span><span class="ct">  <span class="p">}</span></span></div>
+                  <div class="drow"><span class="ln">13</span><span class="ct"><span class="p">}</span></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ PANNELLO DESTRO ============ -->
+      <div class="right">
+
+        <!-- Response -->
+        <div class="response">
+          <div class="resp-head">
+            <span class="ttl">Response</span>
+            <span class="resp-spacer"></span>
+            <span class="badge ok">200 OK</span>
+            <span class="resp-meta">256 ms</span>
+            <span class="resp-meta">1.24 KB</span>
+            <span class="more"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>
+          </div>
+          <div class="resp-tabs">
+            <div class="rsp-tab active">Body</div>
+            <div class="rsp-tab">Headers <span class="cnt">(12)</span></div>
+            <div class="rsp-tab">Cookies</div>
+            <div class="rsp-tab">Tests <span class="cnt">(2/2)</span></div>
+          </div>
+          <div class="rsp-sub">
+            <div class="pill-group"><span class="pill on">Pretty</span><span class="pill">Raw</span><span class="pill">Preview</span></div>
+            <span class="mini-sel">JSON <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+            <span class="sp"></span>
+            <span class="rsp-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+            <span class="rsp-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
+          </div>
+          <div class="resp-code">
+            <div class="code">
+              <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10</div>
+<div class="lines"><span class="p">{</span>
+  <span class="k">"token"</span><span class="p">:</span> <span class="s">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span><span class="p">,</span>
+  <span class="k">"token_type"</span><span class="p">:</span> <span class="s">"Bearer"</span><span class="p">,</span>
+  <span class="k">"expires_in"</span><span class="p">:</span> <span class="n">3600</span><span class="p">,</span>
+  <span class="k">"user"</span><span class="p">:</span> <span class="p">{</span>
+    <span class="k">"id"</span><span class="p">:</span> <span class="s">"12345"</span><span class="p">,</span>
+    <span class="k">"name"</span><span class="p">:</span> <span class="s">"Admin User"</span><span class="p">,</span>
+    <span class="k">"role"</span><span class="p">:</span> <span class="s">"admin"</span>
+  <span class="p">}</span>
+<span class="p">}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="perf">
+          <div class="perf-tabs">
+            <div class="ptab active">Performance</div>
+            <div class="ptab">Runs</div>
+          </div>
+          <div class="perf-body">
+            <div class="perf-row1">
+              <span class="name">Test: Login API</span>
+              <span class="tag-ok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 6"/></svg>Completed</span>
+              <span class="when">Today, 10:24 AM</span>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="kpi"><div class="lbl">Duration</div><div class="val">60s</div></div>
+              <div class="kpi"><div class="lbl">Virtual Users</div><div class="val">50</div></div>
+              <div class="kpi"><div class="lbl">Ramp-up</div><div class="val">10s</div></div>
+              <div class="kpi"><div class="lbl">Requests</div><div class="val">18,732</div></div>
+            </div>
+
+            <div class="metric-grid">
+              <div class="metric">
+                <div class="ml">Requests / Sec</div>
+                <div class="mv">312 <small>avg</small></div>
+                <svg class="spark" viewBox="0 0 120 30" preserveAspectRatio="none"><polyline fill="none" stroke="#8b6dff" stroke-width="1.6" points="0,20 12,14 24,18 36,10 48,16 60,8 72,14 84,9 96,15 108,11 120,13"/></svg>
+              </div>
+              <div class="metric">
+                <div class="ml">Avg Latency</div>
+                <div class="mv">120 <small>ms</small></div>
+                <svg class="spark" viewBox="0 0 120 30" preserveAspectRatio="none"><polyline fill="none" stroke="#39a0ff" stroke-width="1.6" points="0,16 12,18 24,12 36,15 48,10 60,17 72,11 84,16 96,12 108,18 120,14"/></svg>
+              </div>
+              <div class="metric">
+                <div class="ml">P95 Latency</div>
+                <div class="mv">340 <small>ms</small></div>
+                <svg class="spark" viewBox="0 0 120 30" preserveAspectRatio="none"><polyline fill="none" stroke="#e3a008" stroke-width="1.6" points="0,18 12,12 24,16 36,9 48,15 60,11 72,17 84,10 96,14 108,8 120,12"/></svg>
+              </div>
+              <div class="metric">
+                <div class="ml">Error Rate</div>
+                <div class="mv">0.21<small>%</small></div>
+                <svg class="spark" viewBox="0 0 120 30" preserveAspectRatio="none"><polyline fill="none" stroke="#f85149" stroke-width="1.6" points="0,22 12,20 24,23 36,19 48,24 60,21 72,25 84,20 96,23 108,19 120,22"/></svg>
+              </div>
+            </div>
+
+            <div class="chart-tabs">
+              <div class="ctab active">Requests / Sec</div>
+              <div class="ctab">Latency</div>
+              <div class="ctab">Errors</div>
+            </div>
+
+            <!-- Grafico grande -->
+            <div class="big-chart">
+              <svg viewBox="0 0 620 220" width="100%" preserveAspectRatio="none" style="display:block">
+                <defs>
+                  <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#8b6dff" stop-opacity="0.35"/>
+                    <stop offset="100%" stop-color="#8b6dff" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- griglia + assi Y -->
+                <g stroke="#1e1e2a" stroke-width="1">
+                  <line x1="46" y1="20" x2="610" y2="20"/>
+                  <line x1="46" y1="58" x2="610" y2="58"/>
+                  <line x1="46" y1="96" x2="610" y2="96"/>
+                  <line x1="46" y1="134" x2="610" y2="134"/>
+                  <line x1="46" y1="172" x2="610" y2="172"/>
+                </g>
+                <g class="axis" text-anchor="end">
+                  <text x="38" y="24">500</text><text x="38" y="62">400</text><text x="38" y="100">300</text>
+                  <text x="38" y="138">200</text><text x="38" y="176">100</text><text x="38" y="200">0</text>
+                </g>
+                <!-- area + linea (curva: sale, plateau, scende) -->
+                <path d="M46,180 L70,150 L94,120 L118,96 L142,80 L166,72 L190,66 L214,60 L238,66 L262,58 L286,64 L310,56 L334,62 L358,58 L382,66 L406,60 L430,70 L454,64 L478,76 L502,84 L526,96 L550,112 L574,128 L598,150 L610,162 L610,190 L46,190 Z" fill="url(#area)"/>
+                <path d="M46,180 L70,150 L94,120 L118,96 L142,80 L166,72 L190,66 L214,60 L238,66 L262,58 L286,64 L310,56 L334,62 L358,58 L382,66 L406,60 L430,70 L454,64 L478,76 L502,84 L526,96 L550,112 L574,128 L598,150 L610,162" fill="none" stroke="#9b80ff" stroke-width="1.8"/>
+                <!-- asse X -->
+                <g class="axis" text-anchor="middle">
+                  <text x="46" y="210">00:00</text><text x="140" y="210">00:10</text><text x="234" y="210">00:20</text>
+                  <text x="328" y="210">00:30</text><text x="422" y="210">00:40</text><text x="516" y="210">00:50</text><text x="600" y="210">01:00</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Interazioni minime per rendere il mockup "navigabile" ----
+// Cambio tab generico: dato un contenitore, attiva il tab cliccato
+function bindTabs(sel){
+  document.querySelectorAll(sel).forEach(group=>{
+    group.querySelectorAll(':scope > *').forEach(tab=>{
+      tab.addEventListener('click',()=>{
+        group.querySelectorAll(':scope > *').forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    });
+  });
+}
+bindTabs('.etabs');     // Params/Headers/Body/...
+bindTabs('.git-tabs');  // Git/History/Branches
+bindTabs('.resp-tabs'); // Body/Headers/Cookies/Tests
+bindTabs('.perf-tabs'); // Performance/Runs
+bindTabs('.chart-tabs');// Requests/Latency/Errors
+
+// Selezione request nell'albero
+document.querySelectorAll('.req').forEach(r=>{
+  r.addEventListener('click',()=>{
+    document.querySelectorAll('.req').forEach(x=>x.classList.remove('active'));
+    r.classList.add('active');
+  });
+});
+
+// Spunta dei file nel pannello Git
+document.querySelectorAll('.chg').forEach(c=>{
+  c.addEventListener('click',()=>{
+    const chk=c.querySelector('.chk');
+    chk.classList.toggle('on');
+    c.classList.toggle('off',!chk.classList.contains('on'));
+  });
+});
+
+// Radio del tipo body
+document.querySelectorAll('.body-type .radio').forEach(rd=>{
+  rd.addEventListener('click',()=>{
+    document.querySelectorAll('.body-type .radio').forEach(x=>x.classList.remove('on'));
+    rd.classList.add('on');
+  });
+});
+
+// Pill Pretty/Raw/Preview
+document.querySelectorAll('.pill-group .pill').forEach(p=>{
+  p.addEventListener('click',()=>{
+    p.parentElement.querySelectorAll('.pill').forEach(x=>x.classList.remove('on'));
+    p.classList.add('on');
+  });
+});
+</script>
+</body>
+</html>
