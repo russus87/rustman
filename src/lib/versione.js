@@ -1,9 +1,18 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.9.0";
+export const VERSIONE = "0.10.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.10.0",
+    voci: [
+      "Corpo form-data (con upload file/multipart) e x-www-form-urlencoded.",
+      "Variabili segrete tenute fuori da git (.rustman-secrets.json).",
+      "Import da OpenAPI/Swagger (3.x e 2.0, JSON o YAML).",
+      "CLI headless 'rustman run' per la CI, con report JUnit.",
+    ],
+  },
   {
     versione: "0.9.0",
     voci: [

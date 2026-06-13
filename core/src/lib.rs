@@ -3,6 +3,7 @@
 pub mod git;
 pub mod http;
 pub mod model;
+pub mod openapi;
 pub mod perf;
 pub mod postman;
 pub mod storage;
@@ -29,6 +30,8 @@ mod tests {
             params: vec![],
             auth: Auth::default(),
             body: String::new(),
+            body_mode: "raw".into(),
+            form: vec![],
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
@@ -54,6 +57,8 @@ mod tests {
             params: vec![],
             auth: Auth::default(),
             body: String::new(),
+            body_mode: "raw".into(),
+            form: vec![],
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),

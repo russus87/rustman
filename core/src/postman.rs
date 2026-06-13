@@ -316,6 +316,8 @@ fn converti_richiesta(item: PmItem, pre_script: String, post_script: String) -> 
         params,
         auth,
         body,
+        body_mode: "raw".into(),
+        form: Vec::new(),
         tests: Vec::new(),
         pre_script,
         post_script,
@@ -524,6 +526,7 @@ fn converti_variabili(nome: String, values: Vec<PmEnvVar>) -> Option<Environment
         .map(|v| Variabile {
             chiave: v.key,
             valore: v.value,
+            segreto: false,
         })
         .collect();
     if variabili.is_empty() {

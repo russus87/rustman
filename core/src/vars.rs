@@ -1,6 +1,6 @@
 //! Sostituzione dei segnaposto `{{nome}}` con i valori di un ambiente.
 
-use crate::model::{Auth, Header, Richiesta};
+use crate::model::{Auth, CampoForm, Header, Richiesta};
 use std::collections::HashMap;
 
 /// Sostituisce in `testo` ogni `{{nome}}` con il valore corrispondente.
@@ -41,6 +41,18 @@ pub fn risolvi(r: &Richiesta, vars: &HashMap<String, String>) -> Richiesta {
             })
             .collect()
     };
+    let mappa_form = |lista: &[CampoForm]| -> Vec<CampoForm> {
+        lista
+            .iter()
+            .map(|c| CampoForm {
+                chiave: s(&c.chiave),
+                valore: s(&c.valore),
+                tipo: c.tipo.clone(),
+                file: s(&c.file),
+                attivo: c.attivo,
+            })
+            .collect()
+    };
 
     Richiesta {
         nome: r.nome.clone(),
@@ -55,6 +67,8 @@ pub fn risolvi(r: &Richiesta, vars: &HashMap<String, String>) -> Richiesta {
             password: s(&r.auth.password),
         },
         body: s(&r.body),
+        body_mode: r.body_mode.clone(),
+        form: mappa_form(&r.form),
         tests: r.tests.clone(),
         pre_script: r.pre_script.clone(),
         post_script: r.post_script.clone(),

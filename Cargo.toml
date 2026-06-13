@@ -1,4 +1,4 @@
 # Workspace Cargo: raggruppa il crate della logica (core) e l'app desktop (src-tauri).
 [workspace]
-members = ["core", "src-tauri", "server"]
+members = ["core", "src-tauri", "server", "cli"]
 resolver = "2"

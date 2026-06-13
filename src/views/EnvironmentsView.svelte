@@ -12,7 +12,7 @@
     sel = envs.length - 1;
   }
   function aggiungiVar() {
-    corrente.environment.variabili.push({ chiave: "", valore: "" });
+    corrente.environment.variabili.push({ chiave: "", valore: "", segreto: false });
   }
   function rimuoviVar(i) {
     corrente.environment.variabili.splice(i, 1);
@@ -57,7 +57,13 @@
     {#each corrente.environment.variabili as v, i}
       <div class="var-riga">
         <input class="inp" placeholder="chiave" bind:value={v.chiave} />
-        <input class="inp" placeholder="valore" bind:value={v.valore} />
+        {#if v.segreto}
+          <input class="inp" type="password" placeholder="valore segreto" bind:value={v.valore} />
+        {:else}
+          <input class="inp" placeholder="valore" bind:value={v.valore} />
+        {/if}
+        <span class="lock" class:on={v.segreto} onclick={() => (v.segreto = !v.segreto)}
+          title={v.segreto ? "Segreto: tenuto fuori da git" : "Rendi segreto"}>{v.segreto ? "🔒" : "🔓"}</span>
         <span class="rm" onclick={() => rimuoviVar(i)} title="Rimuovi">✕</span>
       </div>
     {/each}
@@ -70,7 +76,7 @@
       </button>
       <button class="mini" onclick={elimina}>Elimina</button>
     </div>
-    <div class="hint">Usa le variabili nelle richieste con <code>{"{{nome}}"}</code>.</div>
+    <div class="hint">Usa le variabili nelle richieste con <code>{"{{nome}}"}</code>. Le variabili 🔒 segrete non vengono salvate nei file committati in git.</div>
   </div>
 {/if}
 
@@ -95,6 +101,9 @@
   .inp:focus { border-color: var(--accent); }
   .rm { color: var(--txt-faint); cursor: pointer; padding: 0 4px; }
   .rm:hover { color: var(--red); }
+  .lock { cursor: pointer; padding: 0 3px; font-size: 12px; opacity: .55; filter: grayscale(1); }
+  .lock:hover { opacity: 1; }
+  .lock.on { opacity: 1; filter: none; }
   .mini { background: var(--panel-3); color: var(--txt); border: 1px solid var(--border-2); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; margin-top: 6px; }
   .mini:hover:not(:disabled) { background: #22222e; }
   .mini:disabled { opacity: .55; cursor: default; }

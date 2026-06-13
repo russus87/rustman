@@ -1,0 +1,14 @@
+# CLI headless: esegue collezioni/catene di Rustman in CI (stile Newman),
+# riusando tutta la logica del crate `core`.
+[package]
+name = "rustman-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rustman"
+path = "src/main.rs"
+
+[dependencies]
+rustman-core = { path = "../core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

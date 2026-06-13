@@ -10,6 +10,8 @@ pub enum ErroreHttp {
     MetodoNonValido(String),
     #[error("errore di rete: {0}")]
     Rete(#[from] reqwest::Error),
+    #[error("impossibile leggere il file da allegare: {0}")]
+    File(#[from] std::io::Error),
 }
 
 /// Invia la richiesta e restituisce la risposta con le metriche raccolte.
@@ -55,10 +57,8 @@ pub async fn invia(richiesta: &Richiesta) -> Result<Risposta, ErroreHttp> {
         _ => {}
     }
 
-    // Aggiunge il corpo solo se presente.
-    if !richiesta.body.is_empty() {
-        req = req.body(richiesta.body.clone());
-    }
+    // Corpo della richiesta: dipende dalla modalità scelta.
+    req = applica_corpo(req, richiesta)?;
 
     // Misura il tempo totale: dall'invio alla ricezione del corpo.
     let inizio = Instant::now();
@@ -87,4 +87,60 @@ pub async fn invia(richiesta: &Richiesta) -> Result<Risposta, ErroreHttp> {
         body,
         tempo_ms,
     })
+}
+
+/// Applica il corpo alla richiesta secondo `body_mode`:
+/// - "x-www-form-urlencoded": invia i campi testo come form urlencoded;
+/// - "form-data": costruisce un multipart con campi testo e file (letti da disco);
+/// - "raw" (o altro): invia il corpo grezzo così com'è.
+fn applica_corpo(
+    req: reqwest::RequestBuilder,
+    richiesta: &Richiesta,
+) -> Result<reqwest::RequestBuilder, ErroreHttp> {
+    match richiesta.body_mode.as_str() {
+        "x-www-form-urlencoded" => {
+            let coppie: Vec<(&str, &str)> = richiesta
+                .form
+                .iter()
+                .filter(|c| c.attivo && !c.chiave.is_empty() && c.tipo != "file")
+                .map(|c| (c.chiave.as_str(), c.valore.as_str()))
+                .collect();
+            Ok(if coppie.is_empty() {
+                req
+            } else {
+                req.form(&coppie)
+            })
+        }
+        "form-data" => {
+            let mut form = reqwest::multipart::Form::new();
+            let mut vuoto = true;
+            for c in &richiesta.form {
+                if !c.attivo || c.chiave.is_empty() {
+                    continue;
+                }
+                if c.tipo == "file" {
+                    if c.file.is_empty() {
+                        continue;
+                    }
+                    // I file vengono letti dal filesystem locale (solo desktop).
+                    let bytes = std::fs::read(&c.file)?;
+                    let nome_file = std::path::Path::new(&c.file)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "file".to_string());
+                    let part = reqwest::multipart::Part::bytes(bytes).file_name(nome_file);
+                    form = form.part(c.chiave.clone(), part);
+                } else {
+                    form = form.text(c.chiave.clone(), c.valore.clone());
+                }
+                vuoto = false;
+            }
+            Ok(if vuoto { req } else { req.multipart(form) })
+        }
+        _ => Ok(if richiesta.body.is_empty() {
+            req
+        } else {
+            req.body(richiesta.body.clone())
+        }),
+    }
 }

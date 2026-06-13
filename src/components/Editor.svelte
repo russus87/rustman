@@ -64,6 +64,30 @@
     }
   }
 
+  // Corpo: modalità e campi del form (form-data / urlencoded).
+  // Garantisce i valori di default su richieste vecchie o create al volo.
+  $effect(() => {
+    if (richiesta && richiesta.body_mode == null) richiesta.body_mode = "raw";
+    if (richiesta && !Array.isArray(richiesta.form)) richiesta.form = [];
+  });
+  function aggiungiCampoForm() {
+    if (!richiesta.form) richiesta.form = [];
+    richiesta.form.push({ chiave: "", valore: "", tipo: "text", file: "", attivo: true });
+  }
+  function rimuoviCampoForm(i) {
+    richiesta.form.splice(i, 1);
+  }
+  // Sceglie un file dal disco (solo desktop): serve il percorso per il multipart.
+  async function sfogliaFile(i) {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const scelta = await open({ multiple: false, title: "Scegli un file da allegare" });
+      if (typeof scelta === "string") richiesta.form[i].file = scelta;
+    } catch {
+      /* su web la scelta del percorso file non è disponibile */
+    }
+  }
+
   // Scorciatoie: Ctrl/Cmd+Invio invia, Ctrl/Cmd+S salva.
   function suTasto(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onInvia();
@@ -162,13 +186,50 @@
     </div>
   {:else if tab === "Body"}
     <div class="body-bar">
-      <span class="body-label">Corpo · raw</span>
+      <select class="test-sel" bind:value={richiesta.body_mode}>
+        <option value="raw">raw</option>
+        <option value="form-data">form-data</option>
+        <option value="x-www-form-urlencoded">x-www-form-urlencoded</option>
+      </select>
       <span class="bt-spacer"></span>
-      <span class="beautify" onclick={formatta} title="Indenta il JSON">Formatta</span>
+      {#if (richiesta.body_mode ?? "raw") === "raw"}
+        <span class="beautify" onclick={formatta} title="Indenta il JSON">Formatta</span>
+      {/if}
     </div>
-    <div class="code-wrap">
-      <textarea class="code-area" bind:value={richiesta.body} spellcheck="false" placeholder={'{\n  "chiave": "valore"\n}'}></textarea>
-    </div>
+    {#if (richiesta.body_mode ?? "raw") === "raw"}
+      <div class="code-wrap">
+        <textarea class="code-area" bind:value={richiesta.body} spellcheck="false" placeholder={'{\n  "chiave": "valore"\n}'}></textarea>
+      </div>
+    {:else}
+      <div class="code-wrap" style="padding:12px 14px">
+        <table class="kv">
+          <tbody>
+            {#each richiesta.form ?? [] as c, i}
+              <tr>
+                <td style="width:1%"><input type="checkbox" bind:checked={c.attivo} /></td>
+                <td><input class="inline-input" placeholder="chiave" bind:value={c.chiave} /></td>
+                {#if richiesta.body_mode === "form-data"}
+                  <td style="width:1%"><select class="test-sel" bind:value={c.tipo}><option value="text">text</option><option value="file">file</option></select></td>
+                {/if}
+                {#if richiesta.body_mode === "form-data" && c.tipo === "file"}
+                  <td><div class="file-cell"><input class="inline-input" placeholder="percorso file…" bind:value={c.file} /><button class="mini-b" onclick={() => sfogliaFile(i)}>Sfoglia</button></div></td>
+                {:else}
+                  <td><input class="inline-input" placeholder="valore" bind:value={c.valore} /></td>
+                {/if}
+                <td style="width:1%"><span class="rsp-icon" onclick={() => rimuoviCampoForm(i)} title="Rimuovi">✕</span></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if (richiesta.form ?? []).length === 0}
+          <div class="placeholder" style="height:auto;padding:14px 0"><div>Nessun campo.</div></div>
+        {/if}
+        <button class="btn btn-save" style="margin-top:10px" onclick={aggiungiCampoForm}>+ Aggiungi campo</button>
+        {#if richiesta.body_mode === "form-data"}
+          <div class="script-aiuto" style="border:none;padding:8px 0 0">I file vengono letti dal disco all'invio (solo app desktop).</div>
+        {/if}
+      </div>
+    {/if}
   {:else if tab === "Auth"}
     <div class="code-wrap" style="padding:14px 16px">
       <div class="auth-row">
@@ -346,5 +407,24 @@
   }
   .test-sel option {
     background: var(--panel);
+  }
+  /* Campo file del form-data: input percorso + pulsante "Sfoglia". */
+  .file-cell {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .mini-b {
+    background: var(--panel-3);
+    color: var(--txt);
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .mini-b:hover {
+    background: #22222e;
   }
 </style>

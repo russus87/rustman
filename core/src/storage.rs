@@ -13,9 +13,11 @@
 
 use crate::model::{
     Albero, Auth, Catena, CatenaSuDisco, Collezione, Environment, EnvironmentSuDisco,
-    EsportaCollezione, Nodo, NodoExport, Richiesta, RisultatoImport,
+    EsportaCollezione, Nodo, NodoExport, Richiesta, RisultatoImport, Variabile,
 };
+use crate::openapi;
 use crate::postman::{self, ImportPostman};
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -24,6 +26,11 @@ use std::path::Path;
 const DIR_ENV: &str = "environments";
 /// Nome della cartella riservata alle catene di run (non è una collezione).
 const DIR_RUNS: &str = "runs";
+/// File (gitignorato) dove finiscono i valori delle variabili segrete.
+const FILE_SECRETS: &str = ".rustman-secrets.json";
+
+/// Archivio dei segreti: file dell'ambiente → (chiave variabile → valore).
+type ArchivioSegreti = HashMap<String, HashMap<String, String>>;
 
 /// Trasforma un nome leggibile in un nome file sicuro (es. "Update User" -> "update-user").
 pub fn slug(nome: &str) -> String {
@@ -163,6 +170,8 @@ pub fn crea_richiesta(root: &Path, dir: &str, nome: &str) -> io::Result<String> 
         params: Vec::new(),
         auth: Auth::default(),
         body: String::new(),
+        body_mode: "raw".to_string(),
+        form: Vec::new(),
         tests: Vec::new(),
         pre_script: String::new(),
         post_script: String::new(),
@@ -217,10 +226,21 @@ pub fn carica_environments(root: &Path) -> io::Result<Vec<EnvironmentSuDisco>> {
         .collect();
     files.sort_by_key(|e| e.file_name());
 
+    let segreti = carica_segreti(root);
     for f in files {
         let testo = fs::read_to_string(f.path())?;
-        if let Ok(environment) = serde_json::from_str::<Environment>(&testo) {
+        if let Ok(mut environment) = serde_json::from_str::<Environment>(&testo) {
             let rel = format!("{}/{}", DIR_ENV, f.file_name().to_string_lossy());
+            // Reintegra i valori segreti dall'archivio gitignorato.
+            if let Some(s) = segreti.get(&rel) {
+                for v in environment.variabili.iter_mut() {
+                    if v.segreto {
+                        if let Some(val) = s.get(&v.chiave) {
+                            v.valore = val.clone();
+                        }
+                    }
+                }
+            }
             lista.push(EnvironmentSuDisco { file: rel, environment });
         }
     }
@@ -228,6 +248,8 @@ pub fn carica_environments(root: &Path) -> io::Result<Vec<EnvironmentSuDisco>> {
 }
 
 /// Salva un ambiente e restituisce il suo percorso relativo (rinominando se serve).
+/// I valori delle variabili `segreto` non finiscono nel file committato in git,
+/// ma in `.rustman-secrets.json` (gitignorato).
 pub fn salva_environment(
     root: &Path,
     file_precedente: Option<&str>,
@@ -236,20 +258,98 @@ pub fn salva_environment(
     let dir = root.join(DIR_ENV);
     fs::create_dir_all(&dir)?;
     let rel = format!("{}/{}.json", DIR_ENV, slug(&env.nome));
-    let testo = serde_json::to_string_pretty(env)
+
+    // Separa i segreti: nel file su disco il loro valore resta vuoto.
+    let mut segreti_env: HashMap<String, String> = HashMap::new();
+    let variabili: Vec<Variabile> = env
+        .variabili
+        .iter()
+        .map(|v| {
+            if v.segreto {
+                if !v.valore.is_empty() {
+                    segreti_env.insert(v.chiave.clone(), v.valore.clone());
+                }
+                Variabile {
+                    chiave: v.chiave.clone(),
+                    valore: String::new(),
+                    segreto: true,
+                }
+            } else {
+                v.clone()
+            }
+        })
+        .collect();
+    let env_pubblico = Environment {
+        nome: env.nome.clone(),
+        variabili,
+    };
+
+    let testo = serde_json::to_string_pretty(&env_pubblico)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     fs::write(root.join(&rel), testo)?;
+
+    // Aggiorna l'archivio dei segreti (gestendo l'eventuale rinomina).
+    let mut segreti = carica_segreti(root);
     if let Some(prec) = file_precedente {
         if prec != rel {
             let _ = fs::remove_file(root.join(prec));
+            segreti.remove(prec);
         }
     }
+    if segreti_env.is_empty() {
+        segreti.remove(&rel);
+    } else {
+        segreti.insert(rel.clone(), segreti_env);
+        assicura_gitignore(root)?;
+    }
+    salva_segreti(root, &segreti)?;
+
     Ok(rel)
 }
 
-/// Elimina un ambiente dato il suo percorso relativo.
+/// Elimina un ambiente dato il suo percorso relativo (e i suoi segreti).
 pub fn elimina_environment(root: &Path, file_relativo: &str) -> io::Result<()> {
+    let mut segreti = carica_segreti(root);
+    if segreti.remove(file_relativo).is_some() {
+        salva_segreti(root, &segreti)?;
+    }
     fs::remove_file(root.join(file_relativo))
+}
+
+/// Carica l'archivio dei segreti (vuoto se il file non c'è o è illeggibile).
+fn carica_segreti(root: &Path) -> ArchivioSegreti {
+    fs::read_to_string(root.join(FILE_SECRETS))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Scrive l'archivio dei segreti; se vuoto, rimuove del tutto il file.
+fn salva_segreti(root: &Path, arch: &ArchivioSegreti) -> io::Result<()> {
+    let p = root.join(FILE_SECRETS);
+    if arch.is_empty() {
+        let _ = fs::remove_file(&p);
+        return Ok(());
+    }
+    let testo = serde_json::to_string_pretty(arch)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(&p, testo)
+}
+
+/// Si assicura che `.rustman-secrets.json` sia ignorato da git.
+fn assicura_gitignore(root: &Path) -> io::Result<()> {
+    let p = root.join(".gitignore");
+    let attuale = fs::read_to_string(&p).unwrap_or_default();
+    if attuale.lines().any(|l| l.trim() == FILE_SECRETS) {
+        return Ok(());
+    }
+    let mut nuovo = attuale;
+    if !nuovo.is_empty() && !nuovo.ends_with('\n') {
+        nuovo.push('\n');
+    }
+    nuovo.push_str(FILE_SECRETS);
+    nuovo.push('\n');
+    fs::write(&p, nuovo)
 }
 
 // ===================== Run / catene di chiamate ==============================
@@ -336,23 +436,23 @@ fn a_export(nodi: &[Nodo]) -> Vec<NodoExport> {
         .collect()
 }
 
-/// Import "intelligente": riconosce sia il formato Postman (collection o
-/// environment) sia il formato nativo Rustman, e salva di conseguenza.
+/// Import "intelligente": riconosce OpenAPI/Swagger, il formato Postman
+/// (collection o environment) e il formato nativo Rustman, e salva di conseguenza.
 pub fn importa(root: &Path, contenuto: &str) -> io::Result<RisultatoImport> {
+    // 1) OpenAPI/Swagger (gestisce anche YAML).
+    if let Some((esporta, env)) = openapi::riconosci(contenuto) {
+        return salva_collezione_con_env(root, &esporta, env);
+    }
+    // 2) Postman (collection o environment).
     match postman::riconosci(contenuto) {
         Some(ImportPostman::Collezione(esporta, env)) => {
-            let dir = importa_export(root, &esporta)?;
-            // Se la collezione aveva variabili, salviamo anche l'ambiente derivato.
-            let environment = match env {
-                Some(e) => Some(salva_environment(root, None, &e)?),
-                None => None,
-            };
-            Ok(RisultatoImport::Collezione { dir, environment })
+            salva_collezione_con_env(root, &esporta, env)
         }
         Some(ImportPostman::Environment(env)) => {
             let file = salva_environment(root, None, &env)?;
             Ok(RisultatoImport::Environment { file })
         }
+        // 3) Formato nativo Rustman.
         None => {
             let dir = importa_collezione(root, contenuto)?;
             Ok(RisultatoImport::Collezione {
@@ -361,6 +461,21 @@ pub fn importa(root: &Path, contenuto: &str) -> io::Result<RisultatoImport> {
             })
         }
     }
+}
+
+/// Salva una collezione e l'eventuale ambiente derivato (variabili di
+/// collezione Postman o base URL OpenAPI).
+fn salva_collezione_con_env(
+    root: &Path,
+    esporta: &EsportaCollezione,
+    env: Option<Environment>,
+) -> io::Result<RisultatoImport> {
+    let dir = importa_export(root, esporta)?;
+    let environment = match env {
+        Some(e) => Some(salva_environment(root, None, &e)?),
+        None => None,
+    };
+    Ok(RisultatoImport::Collezione { dir, environment })
 }
 
 /// Importa una collezione dal formato nativo Rustman; restituisce la dir creata.
@@ -423,6 +538,8 @@ mod tests {
             params: vec![],
             auth: Auth::default(),
             body: String::new(),
+            body_mode: "raw".into(),
+            form: vec![],
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
@@ -488,6 +605,39 @@ mod tests {
         assert_eq!(albero.len(), 2);
         let importata = albero.iter().find(|c| c.dir == nuova_dir).unwrap();
         assert_eq!(conta_richieste(&importata.figli), 2); // Login + Ban
+    }
+
+    #[test]
+    fn variabili_segrete_fuori_da_git() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let env = Environment {
+            nome: "Prod".into(),
+            variabili: vec![
+                Variabile { chiave: "base_url".into(), valore: "https://x".into(), segreto: false },
+                Variabile { chiave: "token".into(), valore: "s3cr3t".into(), segreto: true },
+            ],
+        };
+        let rel = salva_environment(root, None, &env).unwrap();
+
+        // Il file committato NON contiene il valore segreto, ma sì quello pubblico.
+        let su_disco = fs::read_to_string(root.join(&rel)).unwrap();
+        assert!(!su_disco.contains("s3cr3t"));
+        assert!(su_disco.contains("https://x"));
+        // .gitignore creato con la riga del file dei segreti.
+        let gi = fs::read_to_string(root.join(".gitignore")).unwrap();
+        assert!(gi.contains(FILE_SECRETS));
+
+        // Il caricamento reintegra il valore segreto.
+        let envs = carica_environments(root).unwrap();
+        let prod = envs.iter().find(|e| e.file == rel).unwrap();
+        let tok = prod.environment.variabili.iter().find(|v| v.chiave == "token").unwrap();
+        assert_eq!(tok.valore, "s3cr3t");
+        assert!(tok.segreto);
+
+        // Eliminando l'ambiente spariscono anche i suoi segreti.
+        elimina_environment(root, &rel).unwrap();
+        assert!(carica_segreti(root).get(&rel).is_none());
     }
 
     #[test]

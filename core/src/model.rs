@@ -18,6 +18,32 @@ fn vero() -> bool {
     true
 }
 
+/// Modalità del corpo di default (compatibilità con i file salvati prima).
+fn body_raw() -> String {
+    "raw".to_string()
+}
+
+fn campo_text() -> String {
+    "text".to_string()
+}
+
+/// Un campo di un form (`form-data` o `x-www-form-urlencoded`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CampoForm {
+    pub chiave: String,
+    /// Valore testuale (per i campi di tipo "text").
+    #[serde(default)]
+    pub valore: String,
+    /// Tipo del campo: "text" oppure "file".
+    #[serde(default = "campo_text")]
+    pub tipo: String,
+    /// Percorso del file da inviare (solo per `tipo == "file"`, solo desktop).
+    #[serde(default)]
+    pub file: String,
+    #[serde(default = "vero")]
+    pub attivo: bool,
+}
+
 /// La richiesta HTTP che l'utente vuole inviare (e che salviamo su file).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Richiesta {
@@ -36,8 +62,15 @@ pub struct Richiesta {
     #[serde(default)]
     pub auth: Auth,
     /// Corpo grezzo della richiesta (es. testo JSON). Vuoto = nessun corpo.
+    /// Usato quando `body_mode` è "raw".
     #[serde(default)]
     pub body: String,
+    /// Modalità del corpo: "raw" | "form-data" | "x-www-form-urlencoded".
+    #[serde(default = "body_raw")]
+    pub body_mode: String,
+    /// Campi del form (per "form-data" e "x-www-form-urlencoded").
+    #[serde(default)]
+    pub form: Vec<CampoForm>,
     /// Asserzioni da verificare sulla risposta (Fase 4).
     #[serde(default)]
     pub tests: Vec<Asserzione>,
@@ -166,6 +199,10 @@ pub struct StatoRepo {
 pub struct Variabile {
     pub chiave: String,
     pub valore: String,
+    /// Se true, il valore è un segreto: non viene scritto nel file committato
+    /// in git, ma in un archivio separato (`.rustman-secrets.json`, gitignorato).
+    #[serde(default)]
+    pub segreto: bool,
 }
 
 /// Un ambiente: un insieme di variabili usate per sostituire i {{segnaposto}}.
