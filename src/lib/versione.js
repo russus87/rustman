@@ -1,9 +1,20 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.11.0";
+export const VERSIONE = "0.12.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.12.0",
+    voci: [
+      "History: confronto (diff) fra due risposte, oltre al replay.",
+      "Contract testing: asserzione 'schema' (JSON Schema), auto dall'import OpenAPI.",
+      "Run data-driven nella CLI (--data CSV/JSON): un'iterazione per riga.",
+      "Command Palette (Ctrl/Cmd+K) per richieste, ambienti, viste e azioni.",
+      "Variabili dinamiche ($timestamp, $randomUUID, ...) con anteprima URL.",
+      "Generatore di documentazione HTML dalle collezioni.",
+    ],
+  },
   {
     versione: "0.11.0",
     voci: [

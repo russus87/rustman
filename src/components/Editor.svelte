@@ -7,6 +7,7 @@
     salvabile,
     environments = [],
     ambienteAttivo = null,
+    variabili = null,
     onCambiaAmbiente,
     onApriEnv,
     onInvia,
@@ -18,6 +19,17 @@
   let tab = $state("Body");
   const tabs = ["Params", "Headers", "Body", "Auth", "Tests", "Pre-script", "Post-script"];
   const metodi = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+
+  // Anteprima dei {{segnaposto}} nell'URL: variabili d'ambiente risolte,
+  // dinamiche ($...) mostrate come marcatore (verranno generate all'invio).
+  function risolviAnteprima(testo) {
+    return (testo || "").replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m, nome) => {
+      if (nome.startsWith("$")) return `‹${nome}›`;
+      const v = variabili?.[nome];
+      return v !== undefined ? v : m;
+    });
+  }
+  const urlRisolto = $derived(risolviAnteprima(richiesta.url));
 
   function classeMetodo(m) {
     if (m === "GET") return "get";
@@ -44,7 +56,7 @@
   }
 
   // Asserzioni (test)
-  const tipiTest = ["status", "tempo", "header", "body", "json"];
+  const tipiTest = ["status", "tempo", "header", "body", "json", "schema"];
   const operatori = ["==", "!=", "<", ">", "contiene"];
   function usaCampo(tipo) {
     return tipo === "header" || tipo === "json";
@@ -161,6 +173,9 @@
     </button>
     <button class="btn btn-save" onclick={() => onCopiaCurl?.(richiesta)} title="Copia come cURL">cURL</button>
   </div>
+  {#if richiesta.url.includes("{{")}
+    <div class="url-preview" title="URL con le variabili risolte">→ {urlRisolto}</div>
+  {/if}
 
   <!-- Tab editor -->
   <div class="etabs">
@@ -473,5 +488,14 @@
   }
   .mini-b:hover {
     background: #22222e;
+  }
+  .url-preview {
+    padding: 4px 16px 6px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--txt-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

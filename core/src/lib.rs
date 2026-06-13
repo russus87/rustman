@@ -1,8 +1,10 @@
 //! Rustman core: logica riutilizzabile da desktop e (in futuro) dal web.
 
 pub mod curl;
+pub mod doc;
 pub mod git;
 pub mod http;
+pub mod jsonschema;
 pub mod model;
 pub mod oauth;
 pub mod openapi;
@@ -10,6 +12,7 @@ pub mod perf;
 pub mod postman;
 pub mod storage;
 pub mod test;
+pub mod textdiff;
 pub mod vars;
 
 #[cfg(test)]

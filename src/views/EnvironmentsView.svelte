@@ -77,6 +77,7 @@
       <button class="mini" onclick={elimina}>Elimina</button>
     </div>
     <div class="hint">Usa le variabili nelle richieste con <code>{"{{nome}}"}</code>. Le variabili 🔒 segrete non vengono salvate nei file committati in git.</div>
+    <div class="hint">Dinamiche: <code>{"{{$timestamp}}"}</code>, <code>{"{{$isoTimestamp}}"}</code>, <code>{"{{$randomUUID}}"}</code>, <code>{"{{$randomInt}}"}</code>, <code>{"{{$randomFloat}}"}</code>.</div>
   </div>
 {/if}
 

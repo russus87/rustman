@@ -392,6 +392,9 @@ pub struct VoceStoria {
     pub status_text: String,
     pub tempo_ms: u128,
     pub dimensione: usize,
+    /// Corpo della risposta (eventualmente troncato), per il diff fra due voci.
+    #[serde(default)]
+    pub body: String,
     /// Nome dell'ambiente attivo al momento dell'invio (se presente).
     #[serde(default)]
     pub ambiente: String,

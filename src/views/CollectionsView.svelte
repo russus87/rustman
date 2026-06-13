@@ -14,6 +14,7 @@
     onEliminaRichiesta,
     onEsporta,
     onImporta,
+    onGeneraDoc,
   } = $props();
 
   let nuovaColl = $state({ attiva: false, nome: "" });
@@ -52,6 +53,9 @@
     </span>
     <span class="side-add" title="Importa (Rustman o Postman: collection / environment)" onclick={() => fileInput.click()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+    </span>
+    <span class="side-add" title="Genera documentazione HTML" onclick={() => onGeneraDoc?.()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
     </span>
     <input type="file" accept=".json,application/json" style="display:none" bind:this={fileInput} onchange={suFileImport} />
   </div>

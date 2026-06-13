@@ -11,10 +11,11 @@
 //! - i `$ref` verso `components/schemas` (3.0) e `definitions` (2.0) vengono risolti.
 
 use crate::model::{
-    Auth, CampoForm, Environment, EsportaCollezione, Header, NodoExport, Richiesta, Variabile,
+    Asserzione, Auth, CampoForm, Environment, EsportaCollezione, Header, NodoExport, Richiesta,
+    Variabile,
 };
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -172,6 +173,10 @@ fn costruisci_richiesta(
         });
     }
 
+    // Contract testing: dallo schema della risposta 2xx (JSON) creiamo
+    // un'asserzione `schema` che valida il body della risposta.
+    let tests = asserzione_contratto(op, comps).into_iter().collect();
+
     Richiesta {
         nome,
         metodo: metodo.to_uppercase(),
@@ -182,10 +187,75 @@ fn costruisci_richiesta(
         body,
         body_mode: "raw".into(),
         form: Vec::<CampoForm>::new(),
-        tests: Vec::new(),
+        tests,
         pre_script: String::new(),
         post_script: String::new(),
     }
+}
+
+/// Crea (se possibile) un'asserzione di tipo `schema` dallo schema della prima
+/// risposta 2xx con corpo JSON dell'operazione.
+fn asserzione_contratto(op: &Operation, comps: &HashMap<String, Schema>) -> Option<Asserzione> {
+    let resp = op
+        .responses
+        .iter()
+        .find(|(code, _)| code.starts_with('2'))
+        .map(|(_, r)| r)?;
+    // OpenAPI 3: content["application/json"].schema; Swagger 2.0: response.schema.
+    let schema = resp
+        .content
+        .get("application/json")
+        .or_else(|| resp.content.values().next())
+        .and_then(|mt| mt.schema.as_ref())
+        .or(resp.schema.as_ref())?;
+
+    let json_schema = schema_a_jsonschema(schema, comps, 0);
+    Some(Asserzione {
+        tipo: "schema".into(),
+        operatore: String::new(),
+        campo: String::new(),
+        atteso: serde_json::to_string(&json_schema).unwrap_or_else(|_| "{}".into()),
+        attivo: true,
+    })
+}
+
+/// Converte uno `Schema` OpenAPI in un JSON Schema autonomo (con $ref risolti).
+fn schema_a_jsonschema(s: &Schema, comps: &HashMap<String, Schema>, depth: u8) -> Value {
+    if depth > 6 {
+        return json!({});
+    }
+    if !s.riferimento.is_empty() {
+        let nome = s.riferimento.rsplit('/').next().unwrap_or("");
+        return match comps.get(nome) {
+            Some(t) => schema_a_jsonschema(t, comps, depth + 1),
+            None => json!({}),
+        };
+    }
+    let mut out = serde_json::Map::new();
+    if !s.tipo.is_empty() {
+        out.insert("type".into(), json!(s.tipo));
+    }
+    if s.nullable {
+        out.insert("nullable".into(), json!(true));
+    }
+    if !s.enumerazione.is_empty() {
+        out.insert("enum".into(), json!(s.enumerazione));
+    }
+    if !s.required.is_empty() {
+        out.insert("required".into(), json!(s.required));
+    }
+    if !s.properties.is_empty() {
+        let props: serde_json::Map<String, Value> = s
+            .properties
+            .iter()
+            .map(|(k, v)| (k.clone(), schema_a_jsonschema(v, comps, depth + 1)))
+            .collect();
+        out.insert("properties".into(), Value::Object(props));
+    }
+    if let Some(items) = &s.items {
+        out.insert("items".into(), schema_a_jsonschema(items, comps, depth + 1));
+    }
+    Value::Object(out)
 }
 
 /// Valore d'esempio per un parametro (query/header).
@@ -357,6 +427,17 @@ struct Operation {
     parameters: Vec<Parameter>,
     #[serde(default, rename = "requestBody")]
     request_body: Option<RequestBody>,
+    #[serde(default)]
+    responses: BTreeMap<String, ResponseObj>,
+}
+
+#[derive(Deserialize)]
+struct ResponseObj {
+    #[serde(default)]
+    content: HashMap<String, MediaType>,
+    /// Swagger 2.0: lo schema è direttamente sulla response.
+    #[serde(default)]
+    schema: Option<Schema>,
 }
 
 #[derive(Deserialize)]
@@ -419,6 +500,10 @@ struct Schema {
     enumerazione: Vec<Value>,
     #[serde(default)]
     format: String,
+    #[serde(default)]
+    required: Vec<String>,
+    #[serde(default)]
+    nullable: bool,
     #[serde(default, rename = "$ref")]
     riferimento: String,
 }
@@ -444,6 +529,12 @@ paths:
         - name: verbose
           in: query
           example: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
     post:
       operationId: addPet
       tags: [pets]
@@ -485,6 +576,10 @@ components:
         assert_eq!(richiesta.nome, "getPet");
         assert_eq!(richiesta.url, "{{base_url}}/pets/{{petId}}");
         assert!(richiesta.params.iter().any(|p| p.chiave == "verbose"));
+        // Contract testing: un'asserzione "schema" derivata dalla response 200.
+        assert_eq!(richiesta.tests.len(), 1);
+        assert_eq!(richiesta.tests[0].tipo, "schema");
+        assert!(richiesta.tests[0].atteso.contains("properties"));
 
         // POST con body generato dallo schema risolto via $ref.
         let NodoExport::Richiesta { richiesta } = &figli[1] else {

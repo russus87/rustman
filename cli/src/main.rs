@@ -27,6 +27,8 @@ struct Opzioni {
     collezione: Option<String>,
     catena: Option<String>,
     junit: Option<String>,
+    /// File dati (CSV o JSON) per i run data-driven: una iterazione per riga.
+    dati: Option<String>,
 }
 
 /// Esito dell'esecuzione di una singola richiesta.
@@ -61,7 +63,7 @@ async fn main() -> ExitCode {
 
 fn stampa_uso() {
     eprintln!(
-        "Uso:\n  rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] [--junit <file>]"
+        "Uso:\n  rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n              [--data <file.csv|file.json>] [--junit <file>]"
     );
 }
 
@@ -80,6 +82,7 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
         collezione: None,
         catena: None,
         junit: None,
+        dati: None,
     };
     let mut i = 2;
     while i < args.len() {
@@ -94,6 +97,7 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
             "--collection" => opz.collezione = Some(val()?),
             "--chain" => opz.catena = Some(val()?),
             "--junit" => opz.junit = Some(val()?),
+            "--data" => opz.dati = Some(val()?),
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
@@ -108,9 +112,8 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         return Err(format!("Workspace non trovato: {}", root.display()));
     }
 
-    // Variabili dell'ambiente scelto (vuote se non specificato/trovato).
-    // Mutabile: gli script post possono aggiornarle (var-chaining fra i passi).
-    let mut variabili = carica_variabili(root, opz.env.as_deref())?;
+    // Variabili di base dall'ambiente scelto (vuote se non specificato/trovato).
+    let base = carica_variabili(root, opz.env.as_deref())?;
 
     // Mappa file → richiesta da tutto l'albero del workspace.
     let albero = storage::carica_albero(root).map_err(|e| e.to_string())?;
@@ -125,9 +128,27 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         return Err("Nessuna richiesta da eseguire con i filtri indicati.".into());
     }
 
+    // Righe dati per i run data-driven: una iterazione ciascuna (default: una sola
+    // iterazione "vuota"). Le variabili di una riga si sovrappongono a quelle di base.
+    let righe = match &opz.dati {
+        Some(f) => carica_dati(f)?,
+        None => vec![HashMap::new()],
+    };
+    let multi = opz.dati.is_some();
+
     let mut esiti: Vec<Esito> = Vec::new();
-    for (file, richiesta) in selezione {
-        esiti.push(esegui_richiesta(&file, &richiesta, &mut variabili).await);
+    for (idx, riga) in righe.iter().enumerate() {
+        if multi {
+            println!("\n— Iterazione {}/{} —", idx + 1, righe.len());
+        }
+        // Variabili dell'iterazione: base + riga; mutabili per il var-chaining.
+        let mut variabili = base.clone();
+        for (k, v) in riga {
+            variabili.insert(k.clone(), v.clone());
+        }
+        for (file, richiesta) in &selezione {
+            esiti.push(esegui_richiesta(file, richiesta, &mut variabili).await);
+        }
     }
 
     let tutto_ok = riepilogo(&esiti);
@@ -151,6 +172,54 @@ fn carica_variabili(root: &Path, nome: Option<&str>) -> Result<HashMap<String, S
         mappa.insert(v.chiave.clone(), v.valore.clone());
     }
     Ok(mappa)
+}
+
+/// Carica le righe dati da un file CSV o JSON (array di oggetti).
+/// Ogni riga è una mappa chiave→valore (i valori non stringa sono convertiti).
+fn carica_dati(path: &str) -> Result<Vec<HashMap<String, String>>, String> {
+    let testo = std::fs::read_to_string(path).map_err(|e| format!("dati '{path}': {e}"))?;
+    if path.ends_with(".json") || testo.trim_start().starts_with('[') {
+        let arr: Vec<serde_json::Map<String, serde_json::Value>> =
+            serde_json::from_str(&testo).map_err(|e| format!("JSON dati non valido: {e}"))?;
+        Ok(arr
+            .into_iter()
+            .map(|obj| {
+                obj.into_iter()
+                    .map(|(k, v)| {
+                        let s = match v {
+                            serde_json::Value::String(s) => s,
+                            altro => altro.to_string(),
+                        };
+                        (k, s)
+                    })
+                    .collect()
+            })
+            .collect())
+    } else {
+        carica_csv(&testo)
+    }
+}
+
+/// Parsing CSV semplice: prima riga = intestazioni, separatore virgola.
+/// (Non gestisce virgole tra virgolette: per casi complessi usare il JSON.)
+fn carica_csv(testo: &str) -> Result<Vec<HashMap<String, String>>, String> {
+    let mut linee = testo.lines().filter(|l| !l.trim().is_empty());
+    let intestazioni: Vec<String> = linee
+        .next()
+        .ok_or("file CSV vuoto")?
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
+    Ok(linee
+        .map(|riga| {
+            let valori: Vec<&str> = riga.split(',').collect();
+            intestazioni
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (k.clone(), valori.get(i).map(|v| v.trim().to_string()).unwrap_or_default()))
+                .collect()
+        })
+        .collect())
 }
 
 /// Visita ricorsiva dell'albero per raccogliere le richieste per percorso file.

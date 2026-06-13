@@ -36,6 +36,12 @@ export const oauth2Token = (auth, variabili) =>
 export const generaCurl = (richiesta) => call("genera_curl", { richiesta });
 export const importaCurl = (comando) => call("importa_curl", { comando });
 
+// ---- Diff / Doc / Anteprima ----
+export const diffTesti = (vecchio, nuovo) => call("diff_testi", { vecchio, nuovo });
+export const generaDoc = () => call("genera_doc");
+export const anteprima = (testo, variabili) =>
+  call("anteprima", { testo, variabili: variabili ?? null });
+
 // ---- History ----
 export const caricaStoria = () => call("carica_storia");
 export const aggiungiStoria = (voce) => call("aggiungi_storia", { voce });

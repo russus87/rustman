@@ -3,13 +3,13 @@
 //! il percorso del workspace (la cartella, anche repo git, dove vivono le collection).
 
 use rustman_core::{
-    curl, git, http,
+    curl, doc, git, http,
     model::{
         Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, Environment, EnvironmentSuDisco,
         FileModificato, Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoTest,
         Risposta, StatoRepo, VoceStoria,
     },
-    oauth, perf, storage, test, vars,
+    oauth, perf, storage, test, textdiff, vars,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -118,6 +118,27 @@ fn genera_curl(richiesta: Richiesta) -> String {
 #[tauri::command]
 fn importa_curl(comando: String) -> Result<Richiesta, String> {
     curl::analizza(&comando).ok_or_else(|| "comando cURL non riconosciuto".to_string())
+}
+
+/// Diff testuale fra due corpi di risposta (per il confronto nella History).
+#[tauri::command]
+fn diff_testi(vecchio: String, nuovo: String) -> Vec<RigaDiff> {
+    textdiff::diff_linee(&vecchio, &nuovo)
+}
+
+/// Genera la documentazione HTML di tutte le collezioni del workspace.
+#[tauri::command]
+fn genera_doc(app: tauri::AppHandle) -> Result<String, String> {
+    let root = workspace(&app)?;
+    let albero = storage::carica_albero(&root).map_err(|e| e.to_string())?;
+    Ok(doc::genera(&albero))
+}
+
+/// Risolve i `{{segnaposto}}` in un testo (per l'anteprima nell'editor).
+#[tauri::command]
+fn anteprima(testo: String, variabili: Option<HashMap<String, String>>) -> String {
+    let mappa = variabili.unwrap_or_default();
+    vars::sostituisci(&testo, &mappa)
 }
 
 // ====================== Comandi test e performance ======================
@@ -487,6 +508,9 @@ pub fn run() {
             oauth2_token,
             genera_curl,
             importa_curl,
+            diff_testi,
+            genera_doc,
+            anteprima,
             valuta_test,
             esegui_perf,
             lista_workspaces,

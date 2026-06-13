@@ -13,8 +13,12 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
   con upload di file (multipart, su desktop).
 - **Auth** Bearer/Basic e **OAuth 2.0** (client_credentials/password) con "Ottieni token".
 - **Pre/Post-script** in JavaScript (API stile Postman `pm.*`), eseguiti anche dalla CLI.
-- **History** delle richieste inviate con **replay** (riapri e reinvia).
+- **History** delle richieste inviate con **replay** e **diff** fra due risposte.
 - **Copia come cURL** e import di una richiesta da un comando cURL.
+- **Variabili dinamiche**: `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomUUID}}`, `{{$randomInt}}`, `{{$randomFloat}}`, con anteprima dell'URL risolto.
+- **Contract testing**: asserzione `schema` (JSON Schema), popolata in automatico dall'import OpenAPI.
+- **Command Palette** (Ctrl/Cmd+K) per aprire richieste, ambienti, viste e azioni.
+- **Generatore di documentazione** HTML dalle collezioni.
 - **Run**: catene di chiamate per gli integration test.
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
@@ -49,11 +53,13 @@ Esegue le richieste di un workspace, **gli script `pm.*`** e verifica le asserzi
 variabili `{{...}}` vengono risolte e il var-chaining fra i passi è supportato.
 ```bash
 cargo run -p rustman-cli -- run <workspace> [--env <nome>] \
-  [--collection <dir>] [--chain <nome>] [--junit report.xml]
+  [--collection <dir>] [--chain <nome>] [--data dati.csv|dati.json] [--junit report.xml]
 ```
+Con `--data` esegue un'iterazione per riga del file (run **data-driven**), sostituendo
+le variabili con i valori della riga.
 
 ## Struttura
-- `core/` — logica riutilizzabile (HTTP, storage, git, test, perf, import Postman/OpenAPI).
+- `core/` — logica riutilizzabile (HTTP, storage, git, test, perf, import, doc, diff, script).
 - `src-tauri/` — app desktop Tauri.
 - `server/` — server web (Axum) che espone `core` via REST.
 - `cli/` — esecutore headless (`rustman`) per la CI.

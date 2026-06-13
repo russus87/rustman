@@ -14,6 +14,11 @@ pub fn valuta(asserzioni: &[Asserzione], risposta: &Risposta) -> Vec<RisultatoTe
 
 /// Valuta una singola asserzione.
 fn valuta_una(a: &Asserzione, risposta: &Risposta) -> RisultatoTest {
+    // "schema": contract testing del body JSON contro uno schema (in `atteso`).
+    if a.tipo == "schema" {
+        return valida_schema(a, risposta);
+    }
+
     // Ricava il valore "ottenuto" in base al tipo di asserzione.
     let ottenuto: Option<String> = match a.tipo.as_str() {
         "status" => Some(risposta.status.to_string()),
@@ -49,6 +54,45 @@ fn valuta_una(a: &Asserzione, risposta: &Risposta) -> RisultatoTest {
         descrizione,
         passato,
         dettaglio: format!("ottenuto: {}", abbrevia(&ottenuto)),
+    }
+}
+
+/// Valida il body JSON della risposta contro lo schema JSON in `a.atteso`.
+fn valida_schema(a: &Asserzione, risposta: &Risposta) -> RisultatoTest {
+    let descrizione = "body conforme allo schema".to_string();
+    let schema: Value = match serde_json::from_str(&a.atteso) {
+        Ok(v) => v,
+        Err(e) => {
+            return RisultatoTest {
+                descrizione,
+                passato: false,
+                dettaglio: format!("schema non valido: {e}"),
+            }
+        }
+    };
+    let dato: Value = match serde_json::from_str(&risposta.body) {
+        Ok(v) => v,
+        Err(_) => {
+            return RisultatoTest {
+                descrizione,
+                passato: false,
+                dettaglio: "la risposta non è JSON".to_string(),
+            }
+        }
+    };
+    let errori = crate::jsonschema::valida(&schema, &dato);
+    if errori.is_empty() {
+        RisultatoTest {
+            descrizione,
+            passato: true,
+            dettaglio: "valido".to_string(),
+        }
+    } else {
+        RisultatoTest {
+            descrizione,
+            passato: false,
+            dettaglio: abbrevia(&errori.join("; ")),
+        }
     }
 }
 

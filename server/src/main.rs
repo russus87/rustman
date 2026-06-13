@@ -12,11 +12,11 @@ use axum::{
     Router,
 };
 use rustman_core::{
-    curl, git, http,
+    curl, doc, git, http,
     model::{
         Asserzione, Auth, Catena, Environment, Richiesta, Risposta, VoceStoria,
     },
-    oauth, perf, storage, test, vars,
+    oauth, perf, storage, test, textdiff, vars,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -167,6 +167,17 @@ struct CurlImpReq {
 struct StoriaReq {
     voce: VoceStoria,
 }
+#[derive(Deserialize)]
+struct DiffTestiReq {
+    vecchio: String,
+    nuovo: String,
+}
+#[derive(Deserialize)]
+struct AnteprimaReq {
+    testo: String,
+    #[serde(default)]
+    variabili: Option<HashMap<String, String>>,
+}
 
 // ------------------------------ Handler -------------------------------------
 
@@ -233,6 +244,21 @@ async fn h_aggiungi_storia(
 async fn h_pulisci_storia(State(s): State<Stato>) -> Result<Json<()>, Errore> {
     storage::pulisci_storia(&s.root()).map_err(err)?;
     Ok(Json(()))
+}
+
+async fn h_diff_testi(
+    Json(r): Json<DiffTestiReq>,
+) -> Json<Vec<rustman_core::model::RigaDiff>> {
+    Json(textdiff::diff_linee(&r.vecchio, &r.nuovo))
+}
+
+async fn h_genera_doc(State(s): State<Stato>) -> Result<Json<String>, Errore> {
+    let albero = storage::carica_albero(&s.root()).map_err(err)?;
+    Ok(Json(doc::genera(&albero)))
+}
+
+async fn h_anteprima(Json(r): Json<AnteprimaReq>) -> Json<String> {
+    Json(vars::sostituisci(&r.testo, &r.variabili.unwrap_or_default()))
 }
 
 async fn h_percorso(State(s): State<Stato>) -> Json<String> {
@@ -501,6 +527,9 @@ async fn main() {
         .route("/api/carica_storia", post(h_carica_storia))
         .route("/api/aggiungi_storia", post(h_aggiungi_storia))
         .route("/api/pulisci_storia", post(h_pulisci_storia))
+        .route("/api/diff_testi", post(h_diff_testi))
+        .route("/api/genera_doc", post(h_genera_doc))
+        .route("/api/anteprima", post(h_anteprima))
         .route("/api/git_stato", post(h_git_stato))
         .route("/api/git_diff", post(h_git_diff))
         .route("/api/git_commit", post(h_git_commit))

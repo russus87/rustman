@@ -18,6 +18,7 @@
   import HistoryView from "./views/HistoryView.svelte";
   import InfoView from "./views/InfoView.svelte";
   import Editor from "./components/Editor.svelte";
+  import CommandPalette from "./components/CommandPalette.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -125,6 +126,31 @@
     tabAttivoId = tab.id;
   }
 
+  // Confronta le risposte di due voci di cronologia in un tab diff.
+  async function confrontaStoria(a, b) {
+    let righe = [];
+    try { righe = await api.diffTesti(a.body ?? "", b.body ?? ""); } catch (e) { console.error(e); }
+    const tab = {
+      id: prossimoId++, tipo: "diff", file: null,
+      titolo: `Diff risposte · ${a.status} ↔ ${b.status}`, righe,
+    };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
+  // Genera la documentazione HTML e la scarica come file.
+  async function esportaDoc() {
+    try {
+      const html = await api.generaDoc();
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "rustman-doc.html";
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      logga("ok", "Documentazione HTML generata");
+    } catch (e) {
+      logga("errore", `Generazione doc fallita: ${e}`);
+    }
+  }
+
   function chiudiTab(id) {
     const i = tabs.findIndex((t) => t.id === id);
     if (i < 0) return;
@@ -178,6 +204,7 @@
           richiesta: $state.snapshot(t.richiesta),
           status: r.status, status_text: r.status_text,
           tempo_ms: r.tempo_ms, dimensione: r.dimensione,
+          body: (r.body || "").slice(0, 200000), // troncato per il diff
           ambiente: nomeAmbienteAttivo,
         });
         if (vista === "storia") await ricaricaStoria();
@@ -334,7 +361,57 @@
     if (m === "PUT" || m === "PATCH") return "put"; if (m === "DELETE") return "del";
     return "";
   }
+
+  // ---------------- Command Palette (Ctrl/Cmd+K) ----------------
+  let paletteAperta = $state(false);
+
+  // Tutte le richieste dell'albero, appiattite (file, nome, collezione).
+  function appiattisci(figli, acc) {
+    for (const n of figli) {
+      if (n.tipo === "cartella") appiattisci(n.figli, acc);
+      else acc.push(n);
+    }
+    return acc;
+  }
+  const comandi = $derived.by(() => {
+    const out = [];
+    // Richieste
+    for (const c of albero) {
+      for (const n of appiattisci(c.figli, [])) {
+        out.push({
+          tag: n.richiesta.metodo, tagClasse: classeMetodo(n.richiesta.metodo),
+          label: n.richiesta.nome || "(senza nome)", hint: c.nome,
+          azione: () => apriRichiesta(n.file, n.richiesta),
+        });
+      }
+    }
+    // Ambienti
+    for (const e of environments) {
+      out.push({ tag: "ENV", label: e.environment.nome, hint: "Attiva ambiente",
+        azione: () => (ambienteAttivo = e.file) });
+    }
+    // Viste
+    const viste = [["collezioni","Collections"],["run","Run"],["storia","History"],
+      ["git","Git"],["ambienti","Environments"],["workspaces","Workspaces"],["info","Info"]];
+    for (const [v, etichetta] of viste) {
+      out.push({ tag: "VAI", label: etichetta, hint: "Apri vista", azione: () => (vista = v) });
+    }
+    // Azioni
+    out.push({ tag: "⚡", label: "Invia richiesta", hint: "Ctrl+Invio", azione: invia });
+    out.push({ tag: "⚡", label: "Genera documentazione", azione: esportaDoc });
+    out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
+    return out;
+  });
+
+  function scorciatoieGlobali(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      paletteAperta = !paletteAperta;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={scorciatoieGlobali} />
 
 <div class="app">
   <Titlebar />
@@ -355,6 +432,7 @@
           onEliminaRichiesta={eliminaRichiesta}
           onEsporta={esportaCollezione}
           onImporta={importaCollezione}
+          onGeneraDoc={esportaDoc}
         />
       {:else if vista === "run"}
         <RunView {albero} onEsegui={eseguiRun} />
@@ -364,6 +442,7 @@
           onApri={apriDaStoria}
           onAggiorna={ricaricaStoria}
           onPulisci={pulisciStoria}
+          onConfronta={confrontaStoria}
         />
       {:else if vista === "git"}
         <GitView segnale={segnaleGit} onApriDiff={apriDiff} onCambiamento={ricaricaAlbero} />
@@ -425,6 +504,7 @@
                 salvabile={!!tabAttivo.dir}
                 {environments}
                 {ambienteAttivo}
+                variabili={variabiliAttive}
                 onCambiaAmbiente={(f) => (ambienteAttivo = f)}
                 onApriEnv={() => (vista = "ambienti")}
                 onInvia={invia}
@@ -456,3 +536,7 @@
     </div>
   </div>
 </div>
+
+{#if paletteAperta}
+  <CommandPalette {comandi} onChiudi={() => (paletteAperta = false)} />
+{/if}
