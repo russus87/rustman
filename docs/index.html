@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rustman — Client API desktop in Rust + Tauri + Svelte</title>
+  <meta name="description" content="Rustman è un client API desktop e web ispirato a Postman, scritto in Rust, Tauri e Svelte. Collezioni, environments, test, performance e Git integrato." />
+  <link rel="icon" type="image/png" href="logo.png" />
+
+  <!-- Open Graph / social -->
+  <meta property="og:title" content="Rustman — Client API in Rust" />
+  <meta property="og:description" content="Client API desktop e web ispirato a Postman. Veloce, leggero, con Git integrato." />
+  <meta property="og:image" content="logo.png" />
+  <meta property="og:type" content="website" />
+
+  <style>
+    :root {
+      --rust: #f74c00;
+      --rust-soft: #ff7a3c;
+      --amber: #dea584;
+      --bg: #0e1117;
+      --bg-2: #161b22;
+      --card: #1b2230;
+      --line: #2a3340;
+      --text: #e8edf4;
+      --muted: #9aa7b8;
+      --radius: 16px;
+      --max: 1080px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--rust-soft); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+    /* ---------- Nav ---------- */
+    nav {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(12px);
+      background: rgba(14, 17, 23, 0.72);
+      border-bottom: 1px solid var(--line);
+    }
+    nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.15rem; }
+    .brand img { width: 32px; height: 32px; border-radius: 8px; }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: var(--muted); font-size: 0.95rem; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-cta {
+      background: var(--rust); color: #fff !important; padding: 8px 16px;
+      border-radius: 999px; font-weight: 600; font-size: 0.9rem;
+    }
+    .nav-cta:hover { background: var(--rust-soft); text-decoration: none; }
+    @media (max-width: 680px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      position: relative;
+      padding: 96px 0 80px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: ""; position: absolute; inset: 0; z-index: -1;
+      background:
+        radial-gradient(60% 50% at 50% 0%, rgba(247, 76, 0, 0.18), transparent 70%),
+        radial-gradient(40% 40% at 80% 20%, rgba(222, 165, 132, 0.10), transparent 70%);
+    }
+    .hero-logo {
+      width: 96px; height: 96px; border-radius: 22px; margin-bottom: 28px;
+      box-shadow: 0 12px 40px rgba(247, 76, 0, 0.35);
+      animation: float 5s ease-in-out infinite;
+    }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    .hero h1 {
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      line-height: 1.1; font-weight: 800; letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(120deg, var(--rust), var(--amber));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .hero p.lead { font-size: 1.25rem; color: var(--muted); max-width: 640px; margin: 0 auto 36px; }
+    .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 36px; }
+    .badge {
+      background: var(--bg-2); border: 1px solid var(--line); color: var(--amber);
+      padding: 6px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 600;
+    }
+    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 14px 26px; border-radius: 12px; font-weight: 700; font-size: 1rem;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .btn:hover { text-decoration: none; transform: translateY(-2px); }
+    .btn-primary { background: var(--rust); color: #fff; box-shadow: 0 8px 24px rgba(247,76,0,.4); }
+    .btn-primary:hover { background: var(--rust-soft); }
+    .btn-ghost { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+
+    /* ---------- Sections ---------- */
+    section { padding: 80px 0; }
+    .section-head { text-align: center; max-width: 620px; margin: 0 auto 56px; }
+    .section-head h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.01em; margin-bottom: 14px; }
+    .section-head p { color: var(--muted); font-size: 1.1rem; }
+    .eyebrow { color: var(--rust-soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; margin-bottom: 10px; }
+
+    /* ---------- Features ---------- */
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .feature {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 28px; transition: border-color .2s ease, transform .2s ease;
+    }
+    .feature:hover { border-color: var(--rust); transform: translateY(-4px); }
+    .feature .ico { font-size: 1.8rem; margin-bottom: 14px; display: block; }
+    .feature h3 { font-size: 1.15rem; margin-bottom: 8px; }
+    .feature p { color: var(--muted); font-size: 0.95rem; }
+
+    /* ---------- Download ---------- */
+    #download { background: var(--bg-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+    .dl-card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 32px 28px; text-align: center; display: flex; flex-direction: column; align-items: center;
+    }
+    .dl-card .os-ico { font-size: 3rem; margin-bottom: 16px; }
+    .dl-card h3 { font-size: 1.3rem; margin-bottom: 6px; }
+    .dl-card .arch { color: var(--muted); font-size: 0.9rem; margin-bottom: 22px; }
+    .dl-card .btn { width: 100%; justify-content: center; margin-top: auto; }
+    .dl-card .formats { color: var(--muted); font-size: 0.82rem; margin-top: 14px; }
+    .dl-note { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 32px; }
+
+    /* ---------- Code block ---------- */
+    .codeblock {
+      background: #0b0e14; border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 24px 26px; max-width: 720px; margin: 0 auto; overflow-x: auto;
+      font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; font-size: 0.92rem; line-height: 1.8;
+    }
+    .codeblock .c { color: var(--muted); }
+    .codeblock .p { color: var(--rust-soft); }
+
+    /* ---------- Footer ---------- */
+    footer { padding: 48px 0; text-align: center; color: var(--muted); font-size: 0.9rem; }
+    footer .brand { justify-content: center; margin-bottom: 14px; }
+
+    .fade { opacity: 0; transform: translateY(20px); transition: opacity .6s ease, transform .6s ease; }
+    .fade.in { opacity: 1; transform: none; }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="wrap">
+      <div class="brand"><img src="logo.png" alt="Rustman" /> Rustman</div>
+      <div class="nav-links">
+        <a href="#features">Funzionalità</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/russus87/rustman" target="_blank" rel="noopener">GitHub</a>
+        <a class="nav-cta" href="#download">Scarica</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap">
+      <img class="hero-logo" src="logo.png" alt="Rustman logo" />
+      <h1>Il client API <span class="grad">veloce e leggero</span><br />scritto in Rust</h1>
+      <p class="lead">Rustman è un client API desktop e web ispirato a Postman. Collezioni, environments, test, performance e Git integrato — il tutto in un'app nativa e snella.</p>
+      <div class="badges">
+        <span class="badge">🦀 Rust</span>
+        <span class="badge">⚡ Tauri</span>
+        <span class="badge">🧡 Svelte</span>
+        <span class="badge">🆓 Open Source</span>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#download">⬇ Scarica ora</a>
+        <a class="btn btn-ghost" href="https://github.com/russus87/rustman" target="_blank" rel="noopener">★ Stella su GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head fade">
+        <div class="eyebrow">Funzionalità</div>
+        <h2>Tutto quello che ti serve per le tue API</h2>
+        <p>Le stesse comodità di Postman, in un'app nativa che parte in un istante.</p>
+      </div>
+      <div class="features">
+        <div class="feature fade"><span class="ico">📁</span><h3>Collezioni & cartelle</h3><p>Organizza le richieste in cartelle annidate, salvate come file JSON facili da versionare.</p></div>
+        <div class="feature fade"><span class="ico">🔀</span><h3>Git integrato</h3><p>Commit, diff, cronologia e remote con pull/push direttamente sul tuo workspace.</p></div>
+        <div class="feature fade"><span class="ico">✅</span><h3>Test & asserzioni</h3><p>Verifica le risposte e lancia performance test visualizzando i risultati con grafici.</p></div>
+        <div class="feature fade"><span class="ico">🌐</span><h3>Environments</h3><p>Variabili <code>{{...}}</code>, query params e auth Bearer/Basic per ogni ambiente.</p></div>
+        <div class="feature fade"><span class="ico">📜</span><h3>Pre/Post-script</h3><p>Scrivi script JavaScript con API in stile Postman (<code>pm.*</code>) prima e dopo le chiamate.</p></div>
+        <div class="feature fade"><span class="ico">⛓️</span><h3>Run & integration</h3><p>Concatena chiamate per gli integration test, con import/export e workspace multipli.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="section-head fade">
+        <div class="eyebrow">Download</div>
+        <h2>Scarica Rustman</h2>
+        <p>Scegli la tua piattaforma. I pacchetti sono generati automaticamente a ogni release.</p>
+      </div>
+      <div class="downloads">
+        <div class="dl-card fade">
+          <div class="os-ico">🍎</div>
+          <h3>macOS</h3>
+          <div class="arch">Apple Silicon (M1/M2/M3)</div>
+          <a class="btn btn-primary" data-dl="macos" href="https://github.com/russus87/rustman/releases/latest">⬇ Scarica .dmg</a>
+          <div class="formats">.dmg · .app</div>
+        </div>
+        <div class="dl-card fade">
+          <div class="os-ico">🐧</div>
+          <h3>Linux</h3>
+          <div class="arch">x86_64</div>
+          <a class="btn btn-primary" data-dl="linux" href="https://github.com/russus87/rustman/releases/latest">⬇ Scarica AppImage</a>
+          <div class="formats">.AppImage · .deb · .rpm</div>
+        </div>
+        <div class="dl-card fade">
+          <div class="os-ico">🪟</div>
+          <h3>Windows</h3>
+          <div class="arch">x64</div>
+          <a class="btn btn-primary" data-dl="windows" href="https://github.com/russus87/rustman/releases/latest">⬇ Scarica installer</a>
+          <div class="formats">.exe (NSIS) · .msi</div>
+        </div>
+      </div>
+      <p class="dl-note" id="dl-version">Tutte le versioni e le note di rilascio sono su <a href="https://github.com/russus87/rustman/releases" target="_blank" rel="noopener">GitHub Releases</a>.</p>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="wrap">
+      <div class="section-head fade">
+        <div class="eyebrow">Per sviluppatori</div>
+        <h2>Compila dai sorgenti</h2>
+        <p>Hai bisogno di Node, Rust e della Tauri CLI.</p>
+      </div>
+      <div class="codeblock fade">
+<span class="c"># clona il repository</span><br />
+git clone https://github.com/russus87/rustman.git<br />
+<span class="p">cd</span> rustman<br /><br />
+<span class="c"># app desktop in sviluppo</span><br />
+npm install<br />
+cargo tauri dev<br /><br />
+<span class="c"># bundle dei pacchetti → target/release/bundle/</span><br />
+cargo tauri build
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="brand"><img src="logo.png" alt="" style="width:28px;height:28px;border-radius:7px" /> Rustman</div>
+      <p>Client API open source in Rust + Tauri + Svelte.</p>
+      <p style="margin-top:8px"><a href="https://github.com/russus87/rustman" target="_blank" rel="noopener">GitHub</a> · <a href="https://github.com/russus87/rustman/releases" target="_blank" rel="noopener">Releases</a> · <a href="https://github.com/russus87/rustman/issues" target="_blank" rel="noopener">Issues</a></p>
+    </div>
+  </footer>
+
+  <script>
+    // Animazione "fade-in" allo scroll
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.fade').forEach((el) => io.observe(el));
+
+    // Progressive enhancement: aggancia i link diretti dei pacchetti
+    // dall'ultima release pubblicata su GitHub. Se fallisce (release in bozza,
+    // offline, rate limit) i bottoni restano puntati a /releases/latest.
+    const REPO = 'russus87/rustman';
+    const match = {
+      macos:   (n) => /\.dmg$/i.test(n),
+      linux:   (n) => /\.AppImage$/i.test(n),
+      windows: (n) => /-setup\.exe$/i.test(n) || /\.msi$/i.test(n),
+    };
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((rel) => {
+        const assets = rel.assets || [];
+        Object.keys(match).forEach((os) => {
+          const a = assets.find((x) => match[os](x.name));
+          if (a) {
+            const btn = document.querySelector(`[data-dl="${os}"]`);
+            if (btn) btn.href = a.browser_download_url;
+          }
+        });
+        if (rel.tag_name) {
+          const v = document.getElementById('dl-version');
+          v.innerHTML = `Versione più recente: <strong>${rel.tag_name}</strong> · tutte le release su ` +
+            `<a href="https://github.com/${REPO}/releases" target="_blank" rel="noopener">GitHub</a>.`;
+        }
+      })
+      .catch(() => { /* fallback: i link puntano già a /releases/latest */ });
+  </script>
+</body>
+</html>

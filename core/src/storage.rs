@@ -13,8 +13,9 @@
 
 use crate::model::{
     Albero, Auth, Catena, CatenaSuDisco, Collezione, Environment, EnvironmentSuDisco,
-    EsportaCollezione, Nodo, NodoExport, Richiesta,
+    EsportaCollezione, Nodo, NodoExport, Richiesta, RisultatoImport,
 };
+use crate::postman::{self, ImportPostman};
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -335,11 +336,43 @@ fn a_export(nodi: &[Nodo]) -> Vec<NodoExport> {
         .collect()
 }
 
-/// Importa una collezione da una stringa JSON; restituisce la dir creata.
+/// Import "intelligente": riconosce sia il formato Postman (collection o
+/// environment) sia il formato nativo Rustman, e salva di conseguenza.
+pub fn importa(root: &Path, contenuto: &str) -> io::Result<RisultatoImport> {
+    match postman::riconosci(contenuto) {
+        Some(ImportPostman::Collezione(esporta, env)) => {
+            let dir = importa_export(root, &esporta)?;
+            // Se la collezione aveva variabili, salviamo anche l'ambiente derivato.
+            let environment = match env {
+                Some(e) => Some(salva_environment(root, None, &e)?),
+                None => None,
+            };
+            Ok(RisultatoImport::Collezione { dir, environment })
+        }
+        Some(ImportPostman::Environment(env)) => {
+            let file = salva_environment(root, None, &env)?;
+            Ok(RisultatoImport::Environment { file })
+        }
+        None => {
+            let dir = importa_collezione(root, contenuto)?;
+            Ok(RisultatoImport::Collezione {
+                dir,
+                environment: None,
+            })
+        }
+    }
+}
+
+/// Importa una collezione dal formato nativo Rustman; restituisce la dir creata.
 pub fn importa_collezione(root: &Path, contenuto: &str) -> io::Result<String> {
     let esporta: EsportaCollezione = serde_json::from_str(contenuto)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    importa_export(root, &esporta)
+}
 
+/// Scrive una collezione (già in formato `EsportaCollezione`) su disco,
+/// scegliendo un nome di cartella libero; restituisce la dir creata.
+fn importa_export(root: &Path, esporta: &EsportaCollezione) -> io::Result<String> {
     let dir = dir_unica(root, &slug(&esporta.nome));
     fs::create_dir_all(root.join(&dir))?;
     scrivi_export(root, &dir, &esporta.figli)?;

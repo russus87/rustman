@@ -212,10 +212,21 @@
   }
   async function importaCollezione(contenuto) {
     try {
-      const dir = await api.importaCollezione(contenuto);
-      await ricaricaAlbero();
+      // Import "smart": riconosce Rustman e Postman (collection o environment).
+      const esito = await api.importa(contenuto);
+      if (esito.tipo === "environment") {
+        await ricaricaEnvironments();
+        logga("ok", `Ambiente importato (${esito.file})`);
+      } else {
+        await ricaricaAlbero();
+        logga("ok", `Collezione importata in ${esito.dir}`);
+        // Una collezione Postman con variabili crea anche un ambiente.
+        if (esito.environment) {
+          await ricaricaEnvironments();
+          logga("ok", `Variabili importate come ambiente (${esito.environment})`);
+        }
+      }
       segnaleGit++;
-      logga("ok", `Collezione importata in ${dir}`);
     } catch (e) {
       logga("errore", `Import fallito: ${e}`);
     }

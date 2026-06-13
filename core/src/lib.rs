@@ -4,6 +4,7 @@ pub mod git;
 pub mod http;
 pub mod model;
 pub mod perf;
+pub mod postman;
 pub mod storage;
 pub mod test;
 pub mod vars;

@@ -10,6 +10,8 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Pre/Post-script** in JavaScript (API stile Postman `pm.*`).
 - **Run**: catene di chiamate per gli integration test.
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
+- **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
+  header, query, auth, body, script (`pm.*`), variabili di collezione e script ereditati.
 
 ## Sviluppo
 ```bash

@@ -6,7 +6,8 @@ use rustman_core::{
     git, http,
     model::{
         Albero, Asserzione, Catena, CatenaSuDisco, Commit, Environment, EnvironmentSuDisco,
-        FileModificato, Richiesta, RigaDiff, RisultatoPerf, RisultatoTest, Risposta, StatoRepo,
+        FileModificato, Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoTest,
+        Risposta, StatoRepo,
     },
     perf, storage, test, vars,
 };
@@ -249,11 +250,19 @@ fn esporta_collezione(app: tauri::AppHandle, dir: String) -> Result<String, Stri
     storage::esporta_collezione(&root, &dir).map_err(|e| e.to_string())
 }
 
-/// Importa una collezione da una stringa JSON; restituisce la dir creata.
+/// Importa una collezione (formato nativo Rustman); restituisce la dir creata.
 #[tauri::command]
 fn importa_collezione(app: tauri::AppHandle, contenuto: String) -> Result<String, String> {
     let root = workspace(&app)?;
     storage::importa_collezione(&root, &contenuto).map_err(|e| e.to_string())
+}
+
+/// Import intelligente: riconosce sia il formato Rustman sia quello Postman
+/// (collection o environment) e restituisce cosa è stato creato.
+#[tauri::command]
+fn importa(app: tauri::AppHandle, contenuto: String) -> Result<RisultatoImport, String> {
+    let root = workspace(&app)?;
+    storage::importa(&root, &contenuto).map_err(|e| e.to_string())
 }
 
 // ========================= Comandi environments =========================
@@ -437,6 +446,7 @@ pub fn run() {
             elimina_cartella,
             esporta_collezione,
             importa_collezione,
+            importa,
             carica_environments,
             salva_environment,
             elimina_environment,

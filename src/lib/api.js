@@ -61,6 +61,9 @@ export const rimuoviWorkspace = (percorso) => call("rimuovi_workspace", { percor
 export const esportaCollezione = (dir) => call("esporta_collezione", { dir });
 export const importaCollezione = (contenuto) =>
   call("importa_collezione", { contenuto });
+// Import "smart": riconosce sia il formato Rustman sia quello Postman
+// (collection o environment). Restituisce { tipo: "collezione"|"environment", ... }.
+export const importa = (contenuto) => call("importa", { contenuto });
 
 // ---- Catene di run ----
 export const caricaCatene = () => call("carica_catene");

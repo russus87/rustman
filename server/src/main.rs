@@ -256,6 +256,13 @@ async fn h_importa(
     ))
 }
 
+async fn h_importa_smart(
+    State(s): State<Stato>,
+    Json(r): Json<ContenutoReq>,
+) -> Result<Json<rustman_core::model::RisultatoImport>, Errore> {
+    Ok(Json(storage::importa(&s.root(), &r.contenuto).map_err(err)?))
+}
+
 async fn h_carica_env(
     State(s): State<Stato>,
 ) -> Result<Json<Vec<rustman_core::model::EnvironmentSuDisco>>, Errore> {
@@ -422,6 +429,7 @@ async fn main() {
         .route("/api/elimina_cartella", post(h_elimina_cartella))
         .route("/api/esporta_collezione", post(h_esporta))
         .route("/api/importa_collezione", post(h_importa))
+        .route("/api/importa", post(h_importa_smart))
         .route("/api/carica_environments", post(h_carica_env))
         .route("/api/salva_environment", post(h_salva_env))
         .route("/api/elimina_environment", post(h_elimina_env))

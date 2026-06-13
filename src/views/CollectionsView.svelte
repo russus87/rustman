@@ -50,7 +50,7 @@
     <span class="side-add" title="Nuova collezione" onclick={() => (nuovaColl.attiva = true)}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
     </span>
-    <span class="side-add" title="Importa collezione" onclick={() => fileInput.click()}>
+    <span class="side-add" title="Importa (Rustman o Postman: collection / environment)" onclick={() => fileInput.click()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
     </span>
     <input type="file" accept=".json,application/json" style="display:none" bind:this={fileInput} onchange={suFileImport} />

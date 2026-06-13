@@ -208,6 +208,23 @@ fn versione_uno() -> u32 {
     1
 }
 
+/// Esito di un import: dice al frontend cosa è stato creato, così può
+/// ricaricare l'albero delle collezioni o la lista degli ambienti.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "tipo", rename_all = "lowercase")]
+pub enum RisultatoImport {
+    /// Importata una collezione: percorso della cartella creata. Se la collezione
+    /// Postman aveva delle variabili, `environment` riporta il file dell'ambiente
+    /// creato a partire da quelle.
+    Collezione {
+        dir: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        environment: Option<String>,
+    },
+    /// Importato un ambiente: percorso del file creato.
+    Environment { file: String },
+}
+
 // ============================ Git (Fase 3) ===================================
 
 /// Un file con modifiche non ancora committate.
