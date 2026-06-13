@@ -11,6 +11,8 @@
     onApriEnv,
     onInvia,
     onSalva,
+    onCopiaCurl,
+    onOttieniToken,
   } = $props();
 
   let tab = $state("Body");
@@ -69,7 +71,27 @@
   $effect(() => {
     if (richiesta && richiesta.body_mode == null) richiesta.body_mode = "raw";
     if (richiesta && !Array.isArray(richiesta.form)) richiesta.form = [];
+    if (richiesta && richiesta.auth && richiesta.auth.oauth2 == null) {
+      richiesta.auth.oauth2 = {
+        grant_type: "client_credentials", token_url: "", auth_url: "",
+        client_id: "", client_secret: "", username: "", password: "",
+        scope: "", access_token: "",
+      };
+    }
   });
+
+  // OAuth2: chiede il token al server di autorizzazione e lo salva nella richiesta.
+  let tokenInCorso = $state(false);
+  async function ottieniToken() {
+    if (!onOttieniToken) return;
+    tokenInCorso = true;
+    try {
+      const token = await onOttieniToken($state.snapshot(richiesta.auth));
+      if (token) richiesta.auth.oauth2.access_token = token;
+    } finally {
+      tokenInCorso = false;
+    }
+  }
   function aggiungiCampoForm() {
     if (!richiesta.form) richiesta.form = [];
     richiesta.form.push({ chiave: "", valore: "", tipo: "text", file: "", attivo: true });
@@ -137,6 +159,7 @@
     <button class="btn btn-save" onclick={onSalva} disabled={!salvabile} title="Salva (Ctrl+S)">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save
     </button>
+    <button class="btn btn-save" onclick={() => onCopiaCurl?.(richiesta)} title="Copia come cURL">cURL</button>
   </div>
 
   <!-- Tab editor -->
@@ -238,6 +261,7 @@
           <option value="none">Nessuna</option>
           <option value="bearer">Bearer Token</option>
           <option value="basic">Basic Auth</option>
+          <option value="oauth2">OAuth 2.0</option>
         </select>
       </div>
       {#if richiesta.auth.tipo === "bearer"}
@@ -245,6 +269,29 @@
       {:else if richiesta.auth.tipo === "basic"}
         <div class="auth-row"><label>Utente</label><input class="inline-input" bind:value={richiesta.auth.utente} /></div>
         <div class="auth-row"><label>Password</label><input class="inline-input" type="password" bind:value={richiesta.auth.password} /></div>
+      {:else if richiesta.auth.tipo === "oauth2"}
+        <div class="auth-row">
+          <label>Grant</label>
+          <select class="test-sel" bind:value={richiesta.auth.oauth2.grant_type}>
+            <option value="client_credentials">Client Credentials</option>
+            <option value="password">Password</option>
+          </select>
+        </div>
+        <div class="auth-row"><label>Token URL</label><input class="inline-input" bind:value={richiesta.auth.oauth2.token_url} placeholder="https://.../oauth/token" /></div>
+        <div class="auth-row"><label>Client ID</label><input class="inline-input" bind:value={richiesta.auth.oauth2.client_id} /></div>
+        <div class="auth-row"><label>Client Secret</label><input class="inline-input" type="password" bind:value={richiesta.auth.oauth2.client_secret} /></div>
+        {#if richiesta.auth.oauth2.grant_type === "password"}
+          <div class="auth-row"><label>Username</label><input class="inline-input" bind:value={richiesta.auth.oauth2.username} /></div>
+          <div class="auth-row"><label>Password</label><input class="inline-input" type="password" bind:value={richiesta.auth.oauth2.password} /></div>
+        {/if}
+        <div class="auth-row"><label>Scope</label><input class="inline-input" bind:value={richiesta.auth.oauth2.scope} placeholder="(facoltativo)" /></div>
+        <div class="auth-row">
+          <label>Access Token</label>
+          <input class="inline-input" type="password" bind:value={richiesta.auth.oauth2.access_token} placeholder="ottenuto o incollato" />
+        </div>
+        <div class="auth-row">
+          <button class="btn btn-save" onclick={ottieniToken} disabled={tokenInCorso}>{tokenInCorso ? "Richiesta..." : "Ottieni token"}</button>
+        </div>
       {/if}
     </div>
   {:else if tab === "Tests"}

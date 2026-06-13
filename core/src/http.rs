@@ -12,6 +12,8 @@ pub enum ErroreHttp {
     Rete(#[from] reqwest::Error),
     #[error("impossibile leggere il file da allegare: {0}")]
     File(#[from] std::io::Error),
+    #[error("OAuth2: {0}")]
+    Oauth(String),
 }
 
 /// Invia la richiesta e restituisce la risposta con le metriche raccolte.
@@ -53,6 +55,9 @@ pub async fn invia(richiesta: &Richiesta) -> Result<Risposta, ErroreHttp> {
                 Some(&richiesta.auth.password)
             };
             req = req.basic_auth(&richiesta.auth.utente, pwd);
+        }
+        "oauth2" if !richiesta.auth.oauth2.access_token.is_empty() => {
+            req = req.bearer_auth(&richiesta.auth.oauth2.access_token);
         }
         _ => {}
     }

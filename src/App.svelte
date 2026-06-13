@@ -15,6 +15,7 @@
   import SettingsView from "./views/SettingsView.svelte";
   import EnvironmentsView from "./views/EnvironmentsView.svelte";
   import RunView from "./views/RunView.svelte";
+  import HistoryView from "./views/HistoryView.svelte";
   import InfoView from "./views/InfoView.svelte";
   import Editor from "./components/Editor.svelte";
   import Response from "./components/Response.svelte";
@@ -29,6 +30,13 @@
   let albero = $state([]);
   let environments = $state([]);
   let ambienteAttivo = $state(null);
+  let storia = $state([]);
+
+  // Nome dell'ambiente attivo (per la cronologia).
+  const nomeAmbienteAttivo = $derived.by(() => {
+    const env = environments.find((e) => e.file === ambienteAttivo);
+    return env ? env.environment.nome : "";
+  });
 
   // Tab aperti e id del tab attivo.
   let tabs = $state([]);
@@ -57,9 +65,31 @@
       if (ambienteAttivo && !environments.some((e) => e.file === ambienteAttivo)) ambienteAttivo = null;
     } catch (e) { console.error(e); }
   }
+  async function ricaricaStoria() {
+    try { storia = await api.caricaStoria(); } catch (e) { console.error(e); }
+  }
+  async function pulisciStoria() {
+    try { await api.pulisciStoria(); storia = []; } catch (e) { console.error(e); }
+  }
   onMount(async () => {
-    await Promise.all([ricaricaAlbero(), ricaricaEnvironments()]);
+    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria()]);
   });
+
+  // ---------------- History / replay ----------------
+  // Riapre una richiesta dalla cronologia in un tab "volante" (senza file),
+  // pronta da reinviare con il pulsante Send.
+  function apriDaStoria(voce) {
+    const r = structuredClone($state.snapshot(voce.richiesta));
+    r.headers ??= []; r.params ??= []; r.tests ??= [];
+    r.auth ??= { tipo: "none", token: "", utente: "", password: "", oauth2: null };
+    r.pre_script ??= ""; r.post_script ??= "";
+    const tab = {
+      id: prossimoId++, tipo: "request", file: null, dir: "",
+      collezione: "(history)", richiesta: r,
+      salvato: "", risposta: null, risultatiTest: [], inCorso: false, errore: null,
+    };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
 
   // ---------------- Gestione tab ----------------
   function nomeCollezione(file) {
@@ -72,7 +102,7 @@
     if (esistente) { tabAttivoId = esistente.id; return; }
     const r = structuredClone($state.snapshot(richiesta));
     r.headers ??= []; r.params ??= []; r.tests ??= [];
-    r.auth ??= { tipo: "none", token: "", utente: "", password: "" };
+    r.auth ??= { tipo: "none", token: "", utente: "", password: "", oauth2: null };
     r.pre_script ??= ""; r.post_script ??= "";
     const dir = file.slice(0, file.lastIndexOf("/"));
     const tab = {
@@ -141,11 +171,44 @@
       for (const l of [...pre.logs, ...post.logs]) logga("info", l);
       const ko = t.risultatiTest.filter((x) => !x.passato).length;
       if (ko) logga("errore", `${ko} test falliti`);
+      // Registra nella cronologia (la richiesta com'è in editor, per il replay).
+      try {
+        await api.aggiungiStoria({
+          quando: new Date().toISOString(),
+          richiesta: $state.snapshot(t.richiesta),
+          status: r.status, status_text: r.status_text,
+          tempo_ms: r.tempo_ms, dimensione: r.dimensione,
+          ambiente: nomeAmbienteAttivo,
+        });
+        if (vista === "storia") await ricaricaStoria();
+      } catch (e) { console.error(e); }
     } catch (e) {
       t.errore = String(e);
       t.risposta = null;
       logga("errore", `Invio fallito: ${e}`);
     } finally { t.inCorso = false; }
+  }
+
+  // OAuth2: ottiene il token (risolvendo le variabili dell'ambiente attivo).
+  async function ottieniTokenOauth(auth) {
+    try {
+      const token = await api.oauth2Token(auth, variabiliAttive || {});
+      logga("ok", "Token OAuth2 ottenuto");
+      return token;
+    } catch (e) {
+      logga("errore", `OAuth2: ${e}`);
+      return null;
+    }
+  }
+  // Copia negli appunti il comando cURL equivalente alla richiesta.
+  async function copiaCurl(richiesta) {
+    try {
+      const cmd = await api.generaCurl($state.snapshot(richiesta));
+      await navigator.clipboard.writeText(cmd);
+      logga("ok", "Comando cURL copiato negli appunti");
+    } catch (e) {
+      logga("errore", `Copia cURL fallita: ${e}`);
+    }
   }
 
   // Autosave con debounce: salva il tab attivo dopo `autosaveMs` di inattività.
@@ -295,6 +358,13 @@
         />
       {:else if vista === "run"}
         <RunView {albero} onEsegui={eseguiRun} />
+      {:else if vista === "storia"}
+        <HistoryView
+          {storia}
+          onApri={apriDaStoria}
+          onAggiorna={ricaricaStoria}
+          onPulisci={pulisciStoria}
+        />
       {:else if vista === "git"}
         <GitView segnale={segnaleGit} onApriDiff={apriDiff} onCambiamento={ricaricaAlbero} />
       {:else if vista === "ambienti"}
@@ -359,6 +429,8 @@
                 onApriEnv={() => (vista = "ambienti")}
                 onInvia={invia}
                 onSalva={salva}
+                onCopiaCurl={copiaCurl}
+                onOttieniToken={ottieniTokenOauth}
               />
             </div>
             <Splitter direction="col" onResize={(d) => ridimensiona("right", -d, 280, 900)} />

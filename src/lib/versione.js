@@ -1,9 +1,18 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.10.0";
+export const VERSIONE = "0.11.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.11.0",
+    voci: [
+      "OAuth 2.0 (client_credentials/password) con pulsante 'Ottieni token'.",
+      "History delle richieste inviate, con replay (riapri e reinvia).",
+      "Copia come cURL e import di una richiesta da comando cURL.",
+      "La CLI esegue anche gli script pre/post pm.* (motore QuickJS).",
+    ],
+  },
   {
     versione: "0.10.0",
     voci: [

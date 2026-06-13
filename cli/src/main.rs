@@ -12,7 +12,9 @@
 //! Nota: gli script JS pre/post (`pm.*`) NON vengono eseguiti dalla CLI; solo le
 //! asserzioni native (`tests`). La sostituzione delle variabili `{{...}}` invece sì.
 
-use rustman_core::model::{Asserzione, Nodo, Richiesta, RisultatoTest};
+mod script;
+
+use rustman_core::model::{Nodo, Richiesta, RisultatoTest};
 use rustman_core::{http, storage, test, vars};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -107,7 +109,8 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
     }
 
     // Variabili dell'ambiente scelto (vuote se non specificato/trovato).
-    let variabili = carica_variabili(root, opz.env.as_deref())?;
+    // Mutabile: gli script post possono aggiornarle (var-chaining fra i passi).
+    let mut variabili = carica_variabili(root, opz.env.as_deref())?;
 
     // Mappa file → richiesta da tutto l'albero del workspace.
     let albero = storage::carica_albero(root).map_err(|e| e.to_string())?;
@@ -124,7 +127,7 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
 
     let mut esiti: Vec<Esito> = Vec::new();
     for (file, richiesta) in selezione {
-        esiti.push(esegui_richiesta(&file, &richiesta, &variabili).await);
+        esiti.push(esegui_richiesta(&file, &richiesta, &mut variabili).await);
     }
 
     let tutto_ok = riepilogo(&esiti);
@@ -197,22 +200,50 @@ fn seleziona(
     Ok(out)
 }
 
-/// Invia una richiesta (risolvendo le variabili) e ne valuta le asserzioni.
+/// Esegue il pre-script, invia la richiesta (variabili risolte), poi il
+/// post-script; raccoglie le asserzioni native e quelle di `pm.test(...)`.
 async fn esegui_richiesta(
     file: &str,
     richiesta: &Richiesta,
-    variabili: &HashMap<String, String>,
+    variabili: &mut HashMap<String, String>,
 ) -> Esito {
-    let r = vars::risolvi(richiesta, variabili);
-    let nome = if r.nome.is_empty() { file.to_string() } else { r.nome.clone() };
+    let nome = if richiesta.nome.is_empty() {
+        file.to_string()
+    } else {
+        richiesta.nome.clone()
+    };
 
-    if !r.pre_script.is_empty() || !r.post_script.is_empty() {
-        eprintln!("  (nota: gli script JS di '{nome}' sono ignorati dalla CLI)");
+    // Pre-script: può impostare variabili usate nella sostituzione.
+    if !richiesta.pre_script.is_empty() {
+        match script::esegui(&richiesta.pre_script, variabili, richiesta, None) {
+            Ok(es) => {
+                *variabili = es.variabili;
+                stampa_logs(&es.logs);
+            }
+            Err(e) => eprintln!("  ✗ pre-script: {e}"),
+        }
     }
+
+    let r = vars::risolvi(richiesta, variabili);
 
     match http::invia(&r).await {
         Ok(risposta) => {
-            let risultati = valuta_se_presenti(&r.tests, &risposta);
+            let mut risultati = if r.tests.is_empty() {
+                Vec::new()
+            } else {
+                test::valuta(&r.tests, &risposta)
+            };
+            // Post-script: aggiorna variabili e aggiunge i risultati di pm.test.
+            if !richiesta.post_script.is_empty() {
+                match script::esegui(&richiesta.post_script, variabili, &r, Some(&risposta)) {
+                    Ok(es) => {
+                        *variabili = es.variabili;
+                        stampa_logs(&es.logs);
+                        risultati.extend(es.tests);
+                    }
+                    Err(e) => eprintln!("  ✗ post-script: {e}"),
+                }
+            }
             stampa_esito(&nome, &r, Some(&risposta), &risultati, None);
             Esito {
                 nome,
@@ -232,14 +263,9 @@ async fn esegui_richiesta(
     }
 }
 
-fn valuta_se_presenti(
-    tests: &[Asserzione],
-    risposta: &rustman_core::model::Risposta,
-) -> Vec<RisultatoTest> {
-    if tests.is_empty() {
-        Vec::new()
-    } else {
-        test::valuta(tests, risposta)
+fn stampa_logs(logs: &[String]) {
+    for l in logs {
+        println!("  · {l}");
     }
 }
 

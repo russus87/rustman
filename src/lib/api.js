@@ -28,6 +28,19 @@ async function call(comando, args = {}) {
 export const inviaRichiesta = (richiesta, variabili) =>
   call("invia_richiesta", { richiesta, variabili: variabili ?? null });
 
+// ---- OAuth2 ----
+export const oauth2Token = (auth, variabili) =>
+  call("oauth2_token", { auth, variabili: variabili ?? null });
+
+// ---- cURL ----
+export const generaCurl = (richiesta) => call("genera_curl", { richiesta });
+export const importaCurl = (comando) => call("importa_curl", { comando });
+
+// ---- History ----
+export const caricaStoria = () => call("carica_storia");
+export const aggiungiStoria = (voce) => call("aggiungi_storia", { voce });
+export const pulisciStoria = () => call("pulisci_storia");
+
 // ---- Test ----
 export const valutaTest = (asserzioni, risposta) =>
   call("valuta_test", { asserzioni, risposta });

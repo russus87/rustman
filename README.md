@@ -11,7 +11,10 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
   (vengono salvati in `.rustman-secrets.json`, gitignorato).
 - **Corpo della richiesta** raw, **`x-www-form-urlencoded`** e **`form-data`**
   con upload di file (multipart, su desktop).
-- **Pre/Post-script** in JavaScript (API stile Postman `pm.*`).
+- **Auth** Bearer/Basic e **OAuth 2.0** (client_credentials/password) con "Ottieni token".
+- **Pre/Post-script** in JavaScript (API stile Postman `pm.*`), eseguiti anche dalla CLI.
+- **History** delle richieste inviate con **replay** (riapri e reinvia).
+- **Copia come cURL** e import di una richiesta da un comando cURL.
 - **Run**: catene di chiamate per gli integration test.
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
@@ -41,9 +44,9 @@ vengono generati automaticamente da GitHub Actions (`.github/workflows/release.y
 quando si pubblica un tag `vX.Y.Z`.
 
 ## CLI (esecuzione in CI)
-Esegue le richieste di un workspace e verifica le asserzioni (campo `tests`),
-uscendo con codice ≠ 0 in caso di fallimento. Gli script JS pre/post non vengono
-eseguiti dalla CLI (solo le asserzioni native); le variabili `{{...}}` invece sì.
+Esegue le richieste di un workspace, **gli script `pm.*`** e verifica le asserzioni
+(campo `tests` + `pm.test`), uscendo con codice ≠ 0 in caso di fallimento. Le
+variabili `{{...}}` vengono risolte e il var-chaining fra i passi è supportato.
 ```bash
 cargo run -p rustman-cli -- run <workspace> [--env <nome>] \
   [--collection <dir>] [--chain <nome>] [--junit report.xml]

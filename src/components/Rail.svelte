@@ -6,6 +6,7 @@
   const voci = [
     { v: "collezioni", t: "Collections", d: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" },
     { v: "run", t: "Run", d: "M5 3l14 9-14 9z" },
+    { v: "storia", t: "History", d: "M12 8v5l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v5h5" },
     { v: "git", t: "Git", d: "M6 3v12M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 3a3 3 0 1 0 0 0zM18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 0v1a4 4 0 0 1-4 4H9" },
     { v: "ambienti", t: "Environments", d: "M8 3H7a2 2 0 0 0-2 2v4l-2 3 2 3v4a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v4l2 3-2 3v4a2 2 0 0 1-2 2h-1" },
     { v: "workspaces", t: "Workspaces", d: "M3 9l9-6 9 6v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 21V12h6v9" },

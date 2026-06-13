@@ -12,11 +12,11 @@ use axum::{
     Router,
 };
 use rustman_core::{
-    git, http,
+    curl, git, http,
     model::{
-        Asserzione, Catena, Environment, Richiesta, Risposta,
+        Asserzione, Auth, Catena, Environment, Richiesta, Risposta, VoceStoria,
     },
-    perf, storage, test, vars,
+    oauth, perf, storage, test, vars,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -149,6 +149,24 @@ struct SalvaCatenaReq {
     file_precedente: Option<String>,
     catena: Catena,
 }
+#[derive(Deserialize)]
+struct OauthReq {
+    auth: Auth,
+    #[serde(default)]
+    variabili: Option<HashMap<String, String>>,
+}
+#[derive(Deserialize)]
+struct CurlGenReq {
+    richiesta: Richiesta,
+}
+#[derive(Deserialize)]
+struct CurlImpReq {
+    comando: String,
+}
+#[derive(Deserialize)]
+struct StoriaReq {
+    voce: VoceStoria,
+}
 
 // ------------------------------ Handler -------------------------------------
 
@@ -174,6 +192,47 @@ async fn h_perf(
         None => r.richiesta,
     };
     Json(perf::esegui(&req, r.n, r.concorrenza).await)
+}
+
+async fn h_oauth_token(Json(r): Json<OauthReq>) -> Result<Json<String>, Errore> {
+    let mut cfg = r.auth.oauth2;
+    if let Some(v) = &r.variabili {
+        let s = |t: &str| vars::sostituisci(t, v);
+        cfg.token_url = s(&cfg.token_url);
+        cfg.client_id = s(&cfg.client_id);
+        cfg.client_secret = s(&cfg.client_secret);
+        cfg.username = s(&cfg.username);
+        cfg.password = s(&cfg.password);
+        cfg.scope = s(&cfg.scope);
+    }
+    Ok(Json(oauth::ottieni_token(&cfg).await.map_err(err)?))
+}
+
+async fn h_genera_curl(Json(r): Json<CurlGenReq>) -> Json<String> {
+    Json(curl::genera(&r.richiesta))
+}
+
+async fn h_importa_curl(Json(r): Json<CurlImpReq>) -> Result<Json<Richiesta>, Errore> {
+    curl::analizza(&r.comando)
+        .map(Json)
+        .ok_or_else(|| Errore("comando cURL non riconosciuto".into()))
+}
+
+async fn h_carica_storia(State(s): State<Stato>) -> Json<Vec<VoceStoria>> {
+    Json(storage::carica_storia(&s.root()))
+}
+
+async fn h_aggiungi_storia(
+    State(s): State<Stato>,
+    Json(r): Json<StoriaReq>,
+) -> Result<Json<()>, Errore> {
+    storage::aggiungi_storia(&s.root(), r.voce).map_err(err)?;
+    Ok(Json(()))
+}
+
+async fn h_pulisci_storia(State(s): State<Stato>) -> Result<Json<()>, Errore> {
+    storage::pulisci_storia(&s.root()).map_err(err)?;
+    Ok(Json(()))
 }
 
 async fn h_percorso(State(s): State<Stato>) -> Json<String> {
@@ -412,6 +471,9 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/invia_richiesta", post(h_invia))
+        .route("/api/oauth2_token", post(h_oauth_token))
+        .route("/api/genera_curl", post(h_genera_curl))
+        .route("/api/importa_curl", post(h_importa_curl))
         .route("/api/valuta_test", post(h_valuta))
         .route("/api/esegui_perf", post(h_perf))
         .route("/api/lista_workspaces", post(h_lista_workspaces))
@@ -436,6 +498,9 @@ async fn main() {
         .route("/api/carica_catene", post(h_carica_catene))
         .route("/api/salva_catena", post(h_salva_catena))
         .route("/api/elimina_catena", post(h_elimina_catena))
+        .route("/api/carica_storia", post(h_carica_storia))
+        .route("/api/aggiungi_storia", post(h_aggiungi_storia))
+        .route("/api/pulisci_storia", post(h_pulisci_storia))
         .route("/api/git_stato", post(h_git_stato))
         .route("/api/git_diff", post(h_git_diff))
         .route("/api/git_commit", post(h_git_commit))

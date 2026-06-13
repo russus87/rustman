@@ -1,6 +1,6 @@
 //! Sostituzione dei segnaposto `{{nome}}` con i valori di un ambiente.
 
-use crate::model::{Auth, CampoForm, Header, Richiesta};
+use crate::model::{Auth, CampoForm, Header, Oauth2, Richiesta};
 use std::collections::HashMap;
 
 /// Sostituisce in `testo` ogni `{{nome}}` con il valore corrispondente.
@@ -65,6 +65,17 @@ pub fn risolvi(r: &Richiesta, vars: &HashMap<String, String>) -> Richiesta {
             token: s(&r.auth.token),
             utente: s(&r.auth.utente),
             password: s(&r.auth.password),
+            oauth2: Oauth2 {
+                grant_type: r.auth.oauth2.grant_type.clone(),
+                token_url: s(&r.auth.oauth2.token_url),
+                auth_url: s(&r.auth.oauth2.auth_url),
+                client_id: s(&r.auth.oauth2.client_id),
+                client_secret: s(&r.auth.oauth2.client_secret),
+                username: s(&r.auth.oauth2.username),
+                password: s(&r.auth.oauth2.password),
+                scope: s(&r.auth.oauth2.scope),
+                access_token: r.auth.oauth2.access_token.clone(),
+            },
         },
         body: s(&r.body),
         body_mode: r.body_mode.clone(),

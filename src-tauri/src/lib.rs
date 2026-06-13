@@ -3,13 +3,13 @@
 //! il percorso del workspace (la cartella, anche repo git, dove vivono le collection).
 
 use rustman_core::{
-    git, http,
+    curl, git, http,
     model::{
-        Albero, Asserzione, Catena, CatenaSuDisco, Commit, Environment, EnvironmentSuDisco,
+        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, Environment, EnvironmentSuDisco,
         FileModificato, Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoTest,
-        Risposta, StatoRepo,
+        Risposta, StatoRepo, VoceStoria,
     },
-    perf, storage, test, vars,
+    oauth, perf, storage, test, vars,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -86,6 +86,38 @@ async fn invia_richiesta(
         None => richiesta,
     };
     http::invia(&r).await.map_err(|e| e.to_string())
+}
+
+/// Ottiene un access token OAuth2 (grant client_credentials/password),
+/// risolvendo prima le eventuali variabili nei campi dell'auth.
+#[tauri::command]
+async fn oauth2_token(
+    auth: Auth,
+    variabili: Option<HashMap<String, String>>,
+) -> Result<String, String> {
+    let mut cfg = auth.oauth2;
+    if let Some(v) = &variabili {
+        let s = |t: &str| vars::sostituisci(t, v);
+        cfg.token_url = s(&cfg.token_url);
+        cfg.client_id = s(&cfg.client_id);
+        cfg.client_secret = s(&cfg.client_secret);
+        cfg.username = s(&cfg.username);
+        cfg.password = s(&cfg.password);
+        cfg.scope = s(&cfg.scope);
+    }
+    oauth::ottieni_token(&cfg).await.map_err(|e| e.to_string())
+}
+
+/// Genera il comando cURL equivalente alla richiesta.
+#[tauri::command]
+fn genera_curl(richiesta: Richiesta) -> String {
+    curl::genera(&richiesta)
+}
+
+/// Importa una richiesta da un comando cURL incollato.
+#[tauri::command]
+fn importa_curl(comando: String) -> Result<Richiesta, String> {
+    curl::analizza(&comando).ok_or_else(|| "comando cURL non riconosciuto".to_string())
 }
 
 // ====================== Comandi test e performance ======================
@@ -320,6 +352,29 @@ fn elimina_catena(app: tauri::AppHandle, file: String) -> Result<(), String> {
     storage::elimina_catena(&root, &file).map_err(|e| e.to_string())
 }
 
+// ========================= Comandi History (replay) =====================
+
+/// Carica la cronologia delle richieste inviate (la più recente per prima).
+#[tauri::command]
+fn carica_storia(app: tauri::AppHandle) -> Result<Vec<VoceStoria>, String> {
+    let root = workspace(&app)?;
+    Ok(storage::carica_storia(&root))
+}
+
+/// Aggiunge una voce alla cronologia.
+#[tauri::command]
+fn aggiungi_storia(app: tauri::AppHandle, voce: VoceStoria) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::aggiungi_storia(&root, voce).map_err(|e| e.to_string())
+}
+
+/// Svuota la cronologia.
+#[tauri::command]
+fn pulisci_storia(app: tauri::AppHandle) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::pulisci_storia(&root).map_err(|e| e.to_string())
+}
+
 // ============================== Comandi Git ==============================
 
 /// Elenco dei file con modifiche non committate.
@@ -429,6 +484,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             invia_richiesta,
+            oauth2_token,
+            genera_curl,
+            importa_curl,
             valuta_test,
             esegui_perf,
             lista_workspaces,
@@ -453,6 +511,9 @@ pub fn run() {
             carica_catene,
             salva_catena,
             elimina_catena,
+            carica_storia,
+            aggiungi_storia,
+            pulisci_storia,
             git_stato,
             git_diff,
             git_commit,

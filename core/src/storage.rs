@@ -13,7 +13,7 @@
 
 use crate::model::{
     Albero, Auth, Catena, CatenaSuDisco, Collezione, Environment, EnvironmentSuDisco,
-    EsportaCollezione, Nodo, NodoExport, Richiesta, RisultatoImport, Variabile,
+    EsportaCollezione, Nodo, NodoExport, Richiesta, RisultatoImport, Variabile, VoceStoria,
 };
 use crate::openapi;
 use crate::postman::{self, ImportPostman};
@@ -28,6 +28,10 @@ const DIR_ENV: &str = "environments";
 const DIR_RUNS: &str = "runs";
 /// File (gitignorato) dove finiscono i valori delle variabili segrete.
 const FILE_SECRETS: &str = ".rustman-secrets.json";
+/// File (gitignorato) con la cronologia delle richieste inviate.
+const FILE_HISTORY: &str = ".rustman-history.json";
+/// Numero massimo di voci di cronologia conservate.
+const MAX_STORIA: usize = 200;
 
 /// Archivio dei segreti: file dell'ambiente → (chiave variabile → valore).
 type ArchivioSegreti = HashMap<String, HashMap<String, String>>;
@@ -300,7 +304,7 @@ pub fn salva_environment(
         segreti.remove(&rel);
     } else {
         segreti.insert(rel.clone(), segreti_env);
-        assicura_gitignore(root)?;
+        assicura_gitignore(root, FILE_SECRETS)?;
     }
     salva_segreti(root, &segreti)?;
 
@@ -336,20 +340,50 @@ fn salva_segreti(root: &Path, arch: &ArchivioSegreti) -> io::Result<()> {
     fs::write(&p, testo)
 }
 
-/// Si assicura che `.rustman-secrets.json` sia ignorato da git.
-fn assicura_gitignore(root: &Path) -> io::Result<()> {
+/// Si assicura che `nome` sia presente nel `.gitignore` del workspace.
+fn assicura_gitignore(root: &Path, nome: &str) -> io::Result<()> {
     let p = root.join(".gitignore");
     let attuale = fs::read_to_string(&p).unwrap_or_default();
-    if attuale.lines().any(|l| l.trim() == FILE_SECRETS) {
+    if attuale.lines().any(|l| l.trim() == nome) {
         return Ok(());
     }
     let mut nuovo = attuale;
     if !nuovo.is_empty() && !nuovo.ends_with('\n') {
         nuovo.push('\n');
     }
-    nuovo.push_str(FILE_SECRETS);
+    nuovo.push_str(nome);
     nuovo.push('\n');
     fs::write(&p, nuovo)
+}
+
+// ===================== History / replay ======================================
+
+/// Carica la cronologia delle richieste (la più recente per prima).
+pub fn carica_storia(root: &Path) -> Vec<VoceStoria> {
+    fs::read_to_string(root.join(FILE_HISTORY))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Aggiunge una voce in cima alla cronologia (troncata a `MAX_STORIA`).
+pub fn aggiungi_storia(root: &Path, voce: VoceStoria) -> io::Result<()> {
+    let mut storia = carica_storia(root);
+    storia.insert(0, voce);
+    storia.truncate(MAX_STORIA);
+    assicura_gitignore(root, FILE_HISTORY)?;
+    let testo = serde_json::to_string_pretty(&storia)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(root.join(FILE_HISTORY), testo)
+}
+
+/// Svuota la cronologia (rimuove il file).
+pub fn pulisci_storia(root: &Path) -> io::Result<()> {
+    let p = root.join(FILE_HISTORY);
+    if p.exists() {
+        fs::remove_file(p)?;
+    }
+    Ok(())
 }
 
 // ===================== Run / catene di chiamate ==============================

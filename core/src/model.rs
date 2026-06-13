@@ -85,7 +85,7 @@ pub struct Richiesta {
 /// Autenticazione della richiesta.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Auth {
-    /// "none" | "bearer" | "basic".
+    /// "none" | "bearer" | "basic" | "oauth2".
     #[serde(default = "auth_none")]
     pub tipo: String,
     /// Token per il tipo "bearer".
@@ -96,6 +96,36 @@ pub struct Auth {
     pub utente: String,
     #[serde(default)]
     pub password: String,
+    /// Configurazione OAuth2 (usata quando `tipo == "oauth2"`).
+    #[serde(default)]
+    pub oauth2: Oauth2,
+}
+
+/// Parametri OAuth2. L'`access_token` viene ottenuto da `token_url` (grant
+/// client_credentials/password) oppure incollato a mano, e poi inviato come Bearer.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Oauth2 {
+    /// "client_credentials" | "password" | "authorization_code".
+    #[serde(default)]
+    pub grant_type: String,
+    #[serde(default)]
+    pub token_url: String,
+    /// URL di autorizzazione (per il grant authorization_code, gestito dalla UI).
+    #[serde(default)]
+    pub auth_url: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default)]
+    pub client_secret: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub scope: String,
+    /// Token corrente da inviare come `Authorization: Bearer ...`.
+    #[serde(default)]
+    pub access_token: String,
 }
 
 fn auth_none() -> String {
@@ -109,6 +139,7 @@ impl Default for Auth {
             token: String::new(),
             utente: String::new(),
             password: String::new(),
+            oauth2: Oauth2::default(),
         }
     }
 }
@@ -344,4 +375,24 @@ pub struct RisultatoPerf {
     pub p99: u128,
     /// Tutte le latenze (ms) in ordine di completamento, per i grafici.
     pub latenze: Vec<u128>,
+}
+
+// ========================= History / replay =================================
+
+/// Una voce della cronologia delle richieste inviate (per la vista History).
+/// Contiene la richiesta completa così com'è stata inviata, per poterla
+/// rieseguire ("replay"), più un riassunto della risposta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoceStoria {
+    /// Data/ora ISO dell'invio (es. "2024-01-01T12:00:00Z").
+    pub quando: String,
+    /// La richiesta inviata (con le variabili già risolte).
+    pub richiesta: Richiesta,
+    pub status: u16,
+    pub status_text: String,
+    pub tempo_ms: u128,
+    pub dimensione: usize,
+    /// Nome dell'ambiente attivo al momento dell'invio (se presente).
+    #[serde(default)]
+    pub ambiente: String,
 }
