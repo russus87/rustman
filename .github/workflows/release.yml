@@ -17,8 +17,6 @@ jobs:
         include:
           - platform: macos-latest      # Mac Apple Silicon
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest      # Mac Intel
-            args: "--target x86_64-apple-darwin"
           - platform: ubuntu-22.04      # Linux (.deb, .rpm, .AppImage)
             args: ""
           - platform: windows-latest    # Windows (.exe NSIS, .msi)
@@ -35,7 +33,7 @@ jobs:
       - name: Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Dipendenze di sistema (solo Linux)
         if: matrix.platform == 'ubuntu-22.04'
