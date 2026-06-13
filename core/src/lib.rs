@@ -1,5 +1,6 @@
 //! Rustman core: logica riutilizzabile da desktop e (in futuro) dal web.
 
+pub mod codegen;
 pub mod curl;
 pub mod doc;
 pub mod git;

@@ -34,6 +34,8 @@ export const oauth2Token = (auth, variabili) =>
 
 // ---- cURL ----
 export const generaCurl = (richiesta) => call("genera_curl", { richiesta });
+export const generaCodice = (richiesta, linguaggio) =>
+  call("genera_codice", { richiesta, linguaggio });
 export const importaCurl = (comando) => call("importa_curl", { comando });
 
 // ---- Diff / Doc / Anteprima ----

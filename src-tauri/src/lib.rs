@@ -3,7 +3,7 @@
 //! il percorso del workspace (la cartella, anche repo git, dove vivono le collection).
 
 use rustman_core::{
-    curl, doc, git, http,
+    codegen, curl, doc, git, http,
     model::{
         Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CoverageReport,
         DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf, Richiesta,
@@ -129,6 +129,12 @@ fn genera_curl(richiesta: Richiesta) -> String {
 #[tauri::command]
 fn importa_curl(comando: String) -> Result<Richiesta, String> {
     curl::analizza(&comando).ok_or_else(|| "comando cURL non riconosciuto".to_string())
+}
+
+/// Genera uno snippet di codice della richiesta ("curl" | "fetch" | "python").
+#[tauri::command]
+fn genera_codice(richiesta: Richiesta, linguaggio: String) -> String {
+    codegen::genera(&richiesta, &linguaggio)
 }
 
 /// Diff testuale fra due corpi di risposta (per il confronto nella History).
@@ -598,6 +604,7 @@ pub fn run() {
             oauth2_token,
             genera_curl,
             importa_curl,
+            genera_codice,
             diff_testi,
             genera_doc,
             anteprima,

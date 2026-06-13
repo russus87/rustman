@@ -12,9 +12,11 @@
     onApriEnv,
     onInvia,
     onSalva,
-    onCopiaCurl,
+    onCopiaCodice,
     onOttieniToken,
   } = $props();
+
+  let lingCodice = $state("curl");
 
   let tab = $state("Body");
   const tabs = ["Params", "Headers", "Body", "Auth", "Tests", "Pre-script", "Post-script"];
@@ -171,7 +173,12 @@
     <button class="btn btn-save" onclick={onSalva} disabled={!salvabile} title="Salva (Ctrl+S)">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save
     </button>
-    <button class="btn btn-save" onclick={() => onCopiaCurl?.(richiesta)} title="Copia come cURL">cURL</button>
+    <select class="test-sel" bind:value={lingCodice} title="Linguaggio dello snippet">
+      <option value="curl">cURL</option>
+      <option value="fetch">fetch</option>
+      <option value="python">Python</option>
+    </select>
+    <button class="btn btn-save" onclick={() => onCopiaCodice?.(richiesta, lingCodice)} title="Copia come codice">Copia</button>
   </div>
   {#if richiesta.url.includes("{{")}
     <div class="url-preview" title="URL con le variabili risolte">→ {urlRisolto}</div>

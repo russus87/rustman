@@ -320,14 +320,14 @@
       return null;
     }
   }
-  // Copia negli appunti il comando cURL equivalente alla richiesta.
-  async function copiaCurl(richiesta) {
+  // Copia negli appunti lo snippet della richiesta nel linguaggio scelto.
+  async function copiaCodice(richiesta, linguaggio = "curl") {
     try {
-      const cmd = await api.generaCurl($state.snapshot(richiesta));
-      await navigator.clipboard.writeText(cmd);
-      logga("ok", "Comando cURL copiato negli appunti");
+      const code = await api.generaCodice($state.snapshot(richiesta), linguaggio);
+      await navigator.clipboard.writeText(code);
+      logga("ok", `Copiato come ${linguaggio}`);
     } catch (e) {
-      logga("errore", `Copia cURL fallita: ${e}`);
+      logga("errore", `Copia fallita: ${e}`);
     }
   }
 
@@ -614,7 +614,7 @@
                 onApriEnv={() => (vista = "ambienti")}
                 onInvia={invia}
                 onSalva={salva}
-                onCopiaCurl={copiaCurl}
+                onCopiaCodice={copiaCodice}
                 onOttieniToken={ottieniTokenOauth}
               />
             </div>

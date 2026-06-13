@@ -12,7 +12,7 @@ use axum::{
     Router,
 };
 use rustman_core::{
-    curl, doc, git, http,
+    codegen, curl, doc, git, http,
     model::{
         Asserzione, Auth, Catena, ConfigCartella, Environment, OpzioniPerf, Richiesta, Risposta,
         RisultatoRun, VoceStoria,
@@ -167,6 +167,11 @@ struct CurlImpReq {
     comando: String,
 }
 #[derive(Deserialize)]
+struct CodiceReq {
+    richiesta: Richiesta,
+    linguaggio: String,
+}
+#[derive(Deserialize)]
 struct StoriaReq {
     voce: VoceStoria,
 }
@@ -272,6 +277,10 @@ async fn h_oauth_token(Json(r): Json<OauthReq>) -> Result<Json<String>, Errore> 
 
 async fn h_genera_curl(Json(r): Json<CurlGenReq>) -> Json<String> {
     Json(curl::genera(&r.richiesta))
+}
+
+async fn h_genera_codice(Json(r): Json<CodiceReq>) -> Json<String> {
+    Json(codegen::genera(&r.richiesta, &r.linguaggio))
 }
 
 async fn h_importa_curl(Json(r): Json<CurlImpReq>) -> Result<Json<Richiesta>, Errore> {
@@ -624,6 +633,7 @@ async fn main() {
         .route("/api/invia_richiesta", post(h_invia))
         .route("/api/oauth2_token", post(h_oauth_token))
         .route("/api/genera_curl", post(h_genera_curl))
+        .route("/api/genera_codice", post(h_genera_codice))
         .route("/api/importa_curl", post(h_importa_curl))
         .route("/api/valuta_test", post(h_valuta))
         .route("/api/esegui_perf", post(h_perf))

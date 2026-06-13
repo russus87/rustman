@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.14.0";
+export const VERSIONE = "0.15.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.15.0",
+    voci: [
+      "Code-gen multi-linguaggio: copia come cURL, fetch (JS) o Python (requests).",
+    ],
+  },
   {
     versione: "0.14.0",
     voci: [
