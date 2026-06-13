@@ -15,10 +15,29 @@
     onEsporta,
     onImporta,
     onGeneraDoc,
+    onTrovaSostituisci,
+    onDrift,
+    onConfigCartella,
   } = $props();
 
   let nuovaColl = $state({ attiva: false, nome: "" });
   let fileInput;
+  let driftInput;
+  let fr = $state({ aperto: false, cerca: "", con: "" });
+
+  async function applicaFr() {
+    if (!fr.cerca) return;
+    await onTrovaSostituisci?.(fr.cerca, fr.con);
+    fr = { aperto: false, cerca: "", con: "" };
+  }
+  async function suDriftFiles(e) {
+    const files = [...(e.target.files || [])];
+    if (files.length === 2) {
+      const [a, b] = await Promise.all(files.map((f) => f.text()));
+      await onDrift?.(a, b, files[0].name, files[1].name);
+    }
+    e.target.value = "";
+  }
 
   // Callback raccolti per i nodi ricorsivi.
   const azioni = {
@@ -29,6 +48,7 @@
     onEliminaCartella,
     onEliminaRichiesta,
     onEsporta,
+    onConfigCartella,
   };
 
   function confermaColl() {
@@ -57,9 +77,24 @@
     <span class="side-add" title="Genera documentazione HTML" onclick={() => onGeneraDoc?.()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
     </span>
+    <span class="side-add" title="Cerca e sostituisci nelle richieste" onclick={() => (fr.aperto = !fr.aperto)}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    </span>
+    <span class="side-add" title="Confronto OpenAPI (drift): scegli 2 file" onclick={() => driftInput.click()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h12M8 7l3-3M8 7l3 3M16 17H4M16 17l-3-3M16 17l-3 3"/></svg>
+    </span>
     <input type="file" accept=".json,application/json" style="display:none" bind:this={fileInput} onchange={suFileImport} />
+    <input type="file" accept=".json,.yaml,.yml" multiple style="display:none" bind:this={driftInput} onchange={suDriftFiles} />
   </div>
 </div>
+
+{#if fr.aperto}
+  <div style="display:flex;flex-direction:column;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border)">
+    <input style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--txt);font-size:12px;outline:none" placeholder="cerca…" bind:value={fr.cerca} />
+    <input style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--txt);font-size:12px;outline:none" placeholder="sostituisci con…" bind:value={fr.con} />
+    <button style="background:linear-gradient(145deg,#8b6dff,#6c47ff);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer" onclick={applicaFr}>Applica a tutte</button>
+  </div>
+{/if}
 
 {#if nuovaColl.attiva}
   <div class="search">

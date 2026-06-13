@@ -25,8 +25,8 @@ async function call(comando, args = {}) {
 }
 
 // ---- HTTP ----
-export const inviaRichiesta = (richiesta, variabili) =>
-  call("invia_richiesta", { richiesta, variabili: variabili ?? null });
+export const inviaRichiesta = (richiesta, variabili, dir) =>
+  call("invia_richiesta", { richiesta, variabili: variabili ?? null, dir: dir ?? null });
 
 // ---- OAuth2 ----
 export const oauth2Token = (auth, variabili) =>
@@ -41,6 +41,13 @@ export const diffTesti = (vecchio, nuovo) => call("diff_testi", { vecchio, nuovo
 export const generaDoc = () => call("genera_doc");
 export const anteprima = (testo, variabili) =>
   call("anteprima", { testo, variabili: variabili ?? null });
+
+// ---- Find&Replace / Drift / Config cartella ----
+export const trovaSostituisci = (cerca, con) => call("trova_sostituisci", { cerca, con });
+export const driftOpenapi = (vecchio, nuovo) => call("drift_openapi", { vecchio, nuovo });
+export const caricaConfigCartella = (dir) => call("carica_config_cartella", { dir });
+export const salvaConfigCartella = (dir, config) =>
+  call("salva_config_cartella", { dir, config });
 
 // ---- History ----
 export const caricaStoria = () => call("carica_storia");

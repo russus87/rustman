@@ -14,9 +14,9 @@ use axum::{
 use rustman_core::{
     curl, doc, git, http,
     model::{
-        Asserzione, Auth, Catena, Environment, Richiesta, Risposta, VoceStoria,
+        Asserzione, Auth, Catena, ConfigCartella, Environment, Richiesta, Risposta, VoceStoria,
     },
-    oauth, perf, storage, test, textdiff, vars,
+    oauth, openapi, perf, storage, test, textdiff, vars,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -67,6 +67,8 @@ struct InviaReq {
     richiesta: Richiesta,
     #[serde(default)]
     variabili: Option<HashMap<String, String>>,
+    #[serde(default)]
+    dir: Option<String>,
 }
 #[derive(Deserialize)]
 struct ValutaReq {
@@ -178,15 +180,35 @@ struct AnteprimaReq {
     #[serde(default)]
     variabili: Option<HashMap<String, String>>,
 }
+#[derive(Deserialize)]
+struct TrovaReq {
+    cerca: String,
+    con: String,
+}
+#[derive(Deserialize)]
+struct DriftReq {
+    vecchio: String,
+    nuovo: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigCartellaReq {
+    dir: String,
+    config: ConfigCartella,
+}
 
 // ------------------------------ Handler -------------------------------------
 
 async fn h_invia(State(s): State<Stato>, Json(r): Json<InviaReq>) -> Result<Json<Risposta>, Errore> {
-    let req = match &r.variabili {
-        Some(v) => vars::risolvi(&r.richiesta, v),
-        None => r.richiesta,
+    // Applica gli header/auth ereditati dalle cartelle (se `dir` è indicata).
+    let richiesta = match &r.dir {
+        Some(d) if !d.is_empty() => storage::eredita(&s.root(), d, &r.richiesta),
+        _ => r.richiesta,
     };
-    let _ = &s; // la send non usa il workspace
+    let req = match &r.variabili {
+        Some(v) => vars::risolvi(&richiesta, v),
+        None => richiesta,
+    };
     Ok(Json(http::invia(&req).await.map_err(err)?))
 }
 
@@ -259,6 +281,38 @@ async fn h_genera_doc(State(s): State<Stato>) -> Result<Json<String>, Errore> {
 
 async fn h_anteprima(Json(r): Json<AnteprimaReq>) -> Json<String> {
     Json(vars::sostituisci(&r.testo, &r.variabili.unwrap_or_default()))
+}
+
+async fn h_trova_sostituisci(
+    State(s): State<Stato>,
+    Json(r): Json<TrovaReq>,
+) -> Result<Json<usize>, Errore> {
+    Ok(Json(
+        storage::trova_sostituisci(&s.root(), &r.cerca, &r.con).map_err(err)?,
+    ))
+}
+
+async fn h_drift_openapi(
+    Json(r): Json<DriftReq>,
+) -> Result<Json<rustman_core::model::DriftReport>, Errore> {
+    openapi::confronta(&r.vecchio, &r.nuovo)
+        .map(Json)
+        .ok_or_else(|| Errore("spec OpenAPI non valido".into()))
+}
+
+async fn h_carica_config_cartella(
+    State(s): State<Stato>,
+    Json(r): Json<DirReq>,
+) -> Json<ConfigCartella> {
+    Json(storage::carica_config_cartella(&s.root(), &r.dir))
+}
+
+async fn h_salva_config_cartella(
+    State(s): State<Stato>,
+    Json(r): Json<ConfigCartellaReq>,
+) -> Result<Json<()>, Errore> {
+    storage::salva_config_cartella(&s.root(), &r.dir, &r.config).map_err(err)?;
+    Ok(Json(()))
 }
 
 async fn h_percorso(State(s): State<Stato>) -> Json<String> {
@@ -530,6 +584,10 @@ async fn main() {
         .route("/api/diff_testi", post(h_diff_testi))
         .route("/api/genera_doc", post(h_genera_doc))
         .route("/api/anteprima", post(h_anteprima))
+        .route("/api/trova_sostituisci", post(h_trova_sostituisci))
+        .route("/api/drift_openapi", post(h_drift_openapi))
+        .route("/api/carica_config_cartella", post(h_carica_config_cartella))
+        .route("/api/salva_config_cartella", post(h_salva_config_cartella))
         .route("/api/git_stato", post(h_git_stato))
         .route("/api/git_diff", post(h_git_diff))
         .route("/api/git_commit", post(h_git_commit))

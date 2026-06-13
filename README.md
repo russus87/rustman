@@ -19,6 +19,11 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Contract testing**: asserzione `schema` (JSON Schema), popolata in automatico dall'import OpenAPI.
 - **Command Palette** (Ctrl/Cmd+K) per aprire richieste, ambienti, viste e azioni.
 - **Generatore di documentazione** HTML dalle collezioni.
+- **Cattura dal response**: dai campi JSON crei variabili o asserzioni con un click.
+- **Trend dei tempi** per endpoint nella History (sparkline, avg/p95).
+- **Drift detection** fra due spec OpenAPI (endpoint aggiunti/rimossi/modificati).
+- **Find & Replace** su tutte le richieste; **ereditarietà** di header/auth per cartella.
+- **Import HAR** (export di rete del browser).
 - **Run**: catene di chiamate per gli integration test.
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
@@ -56,7 +61,8 @@ cargo run -p rustman-cli -- run <workspace> [--env <nome>] \
   [--collection <dir>] [--chain <nome>] [--data dati.csv|dati.json] [--junit report.xml]
 ```
 Con `--data` esegue un'iterazione per riga del file (run **data-driven**), sostituendo
-le variabili con i valori della riga.
+le variabili con i valori della riga. Con `--retry N --delay S` riprova una richiesta
+finché le sue asserzioni passano (poll-until-condition).
 
 ## Struttura
 - `core/` — logica riutilizzabile (HTTP, storage, git, test, perf, import, doc, diff, script).

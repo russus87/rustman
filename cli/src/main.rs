@@ -29,6 +29,10 @@ struct Opzioni {
     junit: Option<String>,
     /// File dati (CSV o JSON) per i run data-driven: una iterazione per riga.
     dati: Option<String>,
+    /// Numero di ritentativi se le asserzioni falliscono (poll-until-condition).
+    retry: u32,
+    /// Attesa fra i ritentativi, in secondi.
+    delay: u64,
 }
 
 /// Esito dell'esecuzione di una singola richiesta.
@@ -63,7 +67,7 @@ async fn main() -> ExitCode {
 
 fn stampa_uso() {
     eprintln!(
-        "Uso:\n  rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n              [--data <file.csv|file.json>] [--junit <file>]"
+        "Uso:\n  rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n              [--data <file.csv|file.json>] [--retry <n>] [--delay <s>] [--junit <file>]"
     );
 }
 
@@ -83,6 +87,8 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
         catena: None,
         junit: None,
         dati: None,
+        retry: 0,
+        delay: 2,
     };
     let mut i = 2;
     while i < args.len() {
@@ -98,6 +104,8 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
             "--chain" => opz.catena = Some(val()?),
             "--junit" => opz.junit = Some(val()?),
             "--data" => opz.dati = Some(val()?),
+            "--retry" => opz.retry = val()?.parse().map_err(|_| "--retry richiede un numero")?,
+            "--delay" => opz.delay = val()?.parse().map_err(|_| "--delay richiede un numero (secondi)")?,
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
@@ -147,7 +155,10 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
             variabili.insert(k.clone(), v.clone());
         }
         for (file, richiesta) in &selezione {
-            esiti.push(esegui_richiesta(file, richiesta, &mut variabili).await);
+            // Applica gli header/auth ereditati dalle cartelle antenate.
+            let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+            let req = storage::eredita(root, dir, richiesta);
+            esiti.push(esegui_richiesta(file, &req, &mut variabili, opz.retry, opz.delay).await);
         }
     }
 
@@ -271,10 +282,13 @@ fn seleziona(
 
 /// Esegue il pre-script, invia la richiesta (variabili risolte), poi il
 /// post-script; raccoglie le asserzioni native e quelle di `pm.test(...)`.
+/// Con `retry > 0` riprova finché le asserzioni passano (poll-until-condition).
 async fn esegui_richiesta(
     file: &str,
     richiesta: &Richiesta,
     variabili: &mut HashMap<String, String>,
+    retry: u32,
+    delay: u64,
 ) -> Esito {
     let nome = if richiesta.nome.is_empty() {
         file.to_string()
@@ -293,43 +307,46 @@ async fn esegui_richiesta(
         }
     }
 
-    let r = vars::risolvi(richiesta, variabili);
-
-    match http::invia(&r).await {
-        Ok(risposta) => {
-            let mut risultati = if r.tests.is_empty() {
-                Vec::new()
-            } else {
-                test::valuta(&r.tests, &risposta)
-            };
-            // Post-script: aggiorna variabili e aggiunge i risultati di pm.test.
-            if !richiesta.post_script.is_empty() {
-                match script::esegui(&richiesta.post_script, variabili, &r, Some(&risposta)) {
-                    Ok(es) => {
-                        *variabili = es.variabili;
-                        stampa_logs(&es.logs);
-                        risultati.extend(es.tests);
+    let tentativi = retry + 1;
+    for tentativo in 1..=tentativi {
+        let r = vars::risolvi(richiesta, variabili);
+        match http::invia(&r).await {
+            Ok(risposta) => {
+                let mut risultati = if r.tests.is_empty() {
+                    Vec::new()
+                } else {
+                    test::valuta(&r.tests, &risposta)
+                };
+                if !richiesta.post_script.is_empty() {
+                    match script::esegui(&richiesta.post_script, variabili, &r, Some(&risposta)) {
+                        Ok(es) => {
+                            *variabili = es.variabili;
+                            stampa_logs(&es.logs);
+                            risultati.extend(es.tests);
+                        }
+                        Err(e) => eprintln!("  ✗ post-script: {e}"),
                     }
-                    Err(e) => eprintln!("  ✗ post-script: {e}"),
                 }
+                let ok = risultati.iter().all(|x| x.passato);
+                if ok || tentativo == tentativi {
+                    stampa_esito(&nome, &r, Some(&risposta), &risultati, None);
+                    return Esito { nome, errore: None, risultati };
+                }
+                eprintln!("  … tentativo {tentativo}/{tentativi} non passato, riprovo tra {delay}s");
             }
-            stampa_esito(&nome, &r, Some(&risposta), &risultati, None);
-            Esito {
-                nome,
-                errore: None,
-                risultati,
+            Err(e) => {
+                if tentativo == tentativi {
+                    let msg = e.to_string();
+                    stampa_esito(&nome, &r, None, &[], Some(&msg));
+                    return Esito { nome, errore: Some(msg), risultati: Vec::new() };
+                }
+                eprintln!("  … invio fallito ({e}), riprovo tra {delay}s");
             }
         }
-        Err(e) => {
-            let msg = e.to_string();
-            stampa_esito(&nome, &r, None, &[], Some(&msg));
-            Esito {
-                nome,
-                errore: Some(msg),
-                risultati: Vec::new(),
-            }
-        }
+        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
     }
+    // Irraggiungibile: il loop ritorna sempre all'ultimo tentativo.
+    Esito { nome, errore: Some("nessun tentativo".into()), risultati: Vec::new() }
 }
 
 fn stampa_logs(logs: &[String]) {

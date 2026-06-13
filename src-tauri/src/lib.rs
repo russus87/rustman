@@ -5,11 +5,11 @@
 use rustman_core::{
     curl, doc, git, http,
     model::{
-        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, Environment, EnvironmentSuDisco,
-        FileModificato, Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoTest,
-        Risposta, StatoRepo, VoceStoria,
+        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, DriftReport,
+        Environment, EnvironmentSuDisco, FileModificato, Richiesta, RigaDiff, RisultatoImport,
+        RisultatoPerf, RisultatoTest, Risposta, StatoRepo, VoceStoria,
     },
-    oauth, perf, storage, test, textdiff, vars,
+    oauth, openapi, perf, storage, test, textdiff, vars,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -78,9 +78,19 @@ fn workspace(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// Invia una richiesta HTTP, applicando prima le variabili d'ambiente (se presenti).
 #[tauri::command]
 async fn invia_richiesta(
+    app: tauri::AppHandle,
     richiesta: Richiesta,
     variabili: Option<HashMap<String, String>>,
+    dir: Option<String>,
 ) -> Result<Risposta, String> {
+    // Applica header/auth ereditati dalle cartelle (se `dir` è indicata).
+    let richiesta = match &dir {
+        Some(d) if !d.is_empty() => {
+            let root = workspace(&app)?;
+            storage::eredita(&root, d, &richiesta)
+        }
+        _ => richiesta,
+    };
     let r = match &variabili {
         Some(v) => vars::risolvi(&richiesta, v),
         None => richiesta,
@@ -139,6 +149,38 @@ fn genera_doc(app: tauri::AppHandle) -> Result<String, String> {
 fn anteprima(testo: String, variabili: Option<HashMap<String, String>>) -> String {
     let mappa = variabili.unwrap_or_default();
     vars::sostituisci(&testo, &mappa)
+}
+
+/// Cerca e sostituisce un testo nei campi di tutte le richieste; restituisce
+/// quante richieste sono state modificate.
+#[tauri::command]
+fn trova_sostituisci(app: tauri::AppHandle, cerca: String, con: String) -> Result<usize, String> {
+    let root = workspace(&app)?;
+    storage::trova_sostituisci(&root, &cerca, &con).map_err(|e| e.to_string())
+}
+
+/// Confronta due spec OpenAPI/Swagger e restituisce il drift report.
+#[tauri::command]
+fn drift_openapi(vecchio: String, nuovo: String) -> Result<DriftReport, String> {
+    openapi::confronta(&vecchio, &nuovo).ok_or_else(|| "spec OpenAPI non valido".to_string())
+}
+
+/// Carica la configurazione ereditabile di una cartella/collezione.
+#[tauri::command]
+fn carica_config_cartella(app: tauri::AppHandle, dir: String) -> Result<ConfigCartella, String> {
+    let root = workspace(&app)?;
+    Ok(storage::carica_config_cartella(&root, &dir))
+}
+
+/// Salva la configurazione ereditabile di una cartella/collezione.
+#[tauri::command]
+fn salva_config_cartella(
+    app: tauri::AppHandle,
+    dir: String,
+    config: ConfigCartella,
+) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::salva_config_cartella(&root, &dir, &config).map_err(|e| e.to_string())
 }
 
 // ====================== Comandi test e performance ======================
@@ -511,6 +553,10 @@ pub fn run() {
             diff_testi,
             genera_doc,
             anteprima,
+            trova_sostituisci,
+            drift_openapi,
+            carica_config_cartella,
+            salva_config_cartella,
             valuta_test,
             esegui_perf,
             lista_workspaces,

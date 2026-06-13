@@ -11,8 +11,8 @@
 //! - i `$ref` verso `components/schemas` (3.0) e `definitions` (2.0) vengono risolti.
 
 use crate::model::{
-    Asserzione, Auth, CampoForm, Environment, EsportaCollezione, Header, NodoExport, Richiesta,
-    Variabile,
+    Asserzione, Auth, CampoForm, DriftReport, Environment, EsportaCollezione, Header, NodoExport,
+    Richiesta, Variabile,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -34,6 +34,58 @@ pub fn riconosci(contenuto: &str) -> Option<(EsportaCollezione, Option<Environme
     }
 
     Some(converti(spec))
+}
+
+/// Confronta due spec OpenAPI/Swagger e segnala le operazioni aggiunte,
+/// rimosse o modificate (drift detection). `None` se uno dei due non è valido.
+pub fn confronta(vecchio: &str, nuovo: &str) -> Option<DriftReport> {
+    let a = operazioni(vecchio)?;
+    let b = operazioni(nuovo)?;
+    let mut report = DriftReport::default();
+    for (k, sig_b) in &b {
+        match a.get(k) {
+            None => report.aggiunti.push(k.clone()),
+            Some(sig_a) if sig_a != sig_b => report.modificati.push(k.clone()),
+            _ => {}
+        }
+    }
+    for k in a.keys() {
+        if !b.contains_key(k) {
+            report.rimossi.push(k.clone());
+        }
+    }
+    Some(report)
+}
+
+/// Mappa "METODO /path" → firma (parametri + presenza corpo) delle operazioni.
+fn operazioni(contenuto: &str) -> Option<BTreeMap<String, String>> {
+    let spec: Spec = serde_json::from_str(contenuto)
+        .ok()
+        .or_else(|| serde_yaml::from_str(contenuto).ok())?;
+    if spec.openapi.is_empty() && spec.swagger.is_empty() {
+        return None;
+    }
+    let mut m = BTreeMap::new();
+    for (path, item) in &spec.paths {
+        for (metodo, op) in item.operazioni() {
+            if let Some(op) = op {
+                m.insert(format!("{} {path}", metodo.to_uppercase()), firma(op));
+            }
+        }
+    }
+    Some(m)
+}
+
+/// Firma di un'operazione: parametri (posizione:nome) ordinati + flag corpo.
+fn firma(op: &Operation) -> String {
+    let mut p: Vec<String> = op
+        .parameters
+        .iter()
+        .map(|x| format!("{}:{}", x.posizione, x.name))
+        .collect();
+    p.sort();
+    let body = if op.request_body.is_some() { "+body" } else { "" };
+    format!("{}{}", p.join(","), body)
 }
 
 fn converti(spec: Spec) -> (EsportaCollezione, Option<Environment>) {
@@ -594,5 +646,21 @@ components:
     fn non_openapi_ignorato() {
         assert!(riconosci(r#"{"info":{"name":"x"},"item":[]}"#).is_none());
         assert!(riconosci("ciao mondo").is_none());
+    }
+
+    #[test]
+    fn drift_aggiunti_rimossi_modificati() {
+        let a = r#"{"openapi":"3.0.0","paths":{
+            "/a":{"get":{}},
+            "/b":{"get":{"parameters":[{"name":"x","in":"query"}]}}
+        }}"#;
+        let b = r#"{"openapi":"3.0.0","paths":{
+            "/b":{"get":{"parameters":[{"name":"x","in":"query"},{"name":"y","in":"query"}]}},
+            "/c":{"post":{}}
+        }}"#;
+        let d = confronta(a, b).unwrap();
+        assert_eq!(d.aggiunti, vec!["POST /c"]);
+        assert_eq!(d.rimossi, vec!["GET /a"]);
+        assert_eq!(d.modificati, vec!["GET /b"]); // parametro y aggiunto
     }
 }

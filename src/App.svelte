@@ -19,6 +19,7 @@
   import InfoView from "./views/InfoView.svelte";
   import Editor from "./components/Editor.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
+  import FolderConfig from "./components/FolderConfig.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -126,6 +127,29 @@
     tabAttivoId = tab.id;
   }
 
+  // Cattura un valore dalla risposta in una variabile dell'ambiente attivo.
+  async function capturaVar(path, value) {
+    const env = environments.find((e) => e.file === ambienteAttivo);
+    if (!env) { logga("errore", "Attiva un ambiente per salvare la variabile"); return; }
+    const chiave = path.split(".").pop() || "valore";
+    const vars = env.environment.variabili.filter((v) => v.chiave !== chiave);
+    vars.push({ chiave, valore: value, segreto: false });
+    const nuovo = { ...env.environment, variabili: vars };
+    try {
+      await api.salvaEnvironment(env.file, nuovo);
+      await ricaricaEnvironments();
+      logga("ok", `Variabile '${chiave}' = ${value} salvata in ${env.environment.nome}`);
+    } catch (e) { logga("errore", `Salvataggio variabile fallito: ${e}`); }
+  }
+  // Crea un'asserzione json sul tab attivo dal campo catturato.
+  function creaTest(path, value) {
+    const t = tabAttivo;
+    if (!t || t.tipo !== "request") return;
+    if (!t.richiesta.tests) t.richiesta.tests = [];
+    t.richiesta.tests.push({ tipo: "json", operatore: "==", campo: path, atteso: value, attivo: true });
+    logga("ok", `Asserzione aggiunta: json '${path}' == ${value}`);
+  }
+
   // Confronta le risposte di due voci di cronologia in un tab diff.
   async function confrontaStoria(a, b) {
     let righe = [];
@@ -136,6 +160,43 @@
     };
     tabs.push(tab); tabAttivoId = tab.id;
   }
+  // Apre l'editor di configurazione ereditabile di una cartella in un tab.
+  async function apriConfigCartella(dir, nome) {
+    const esistente = tabs.find((t) => t.tipo === "cartella" && t.dir === dir);
+    if (esistente) { tabAttivoId = esistente.id; return; }
+    let config = { headers: [], auth: { tipo: "none", token: "", utente: "", password: "", oauth2: null } };
+    try { config = await api.caricaConfigCartella(dir); } catch (e) { console.error(e); }
+    const tab = { id: prossimoId++, tipo: "cartella", dir, nome, config, titolo: `⚙ ${nome}` };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
+  async function salvaConfigCartella(dir, config) {
+    try {
+      await api.salvaConfigCartella(dir, config);
+      segnaleGit++;
+      logga("ok", `Configurazione della cartella salvata (${dir})`);
+    } catch (e) { logga("errore", `Salvataggio config fallito: ${e}`); }
+  }
+
+  // Find & Replace su tutte le richieste delle collezioni.
+  async function trovaSostituisci(cerca, con) {
+    try {
+      const n = await api.trovaSostituisci(cerca, con);
+      await ricaricaAlbero(); segnaleGit++;
+      logga("ok", `Sostituzione applicata a ${n} richieste`);
+    } catch (e) { logga("errore", `Find&Replace fallito: ${e}`); }
+  }
+  // Drift detection fra due spec OpenAPI: mostra il report nel pannello Log.
+  async function confrontaDrift(vecchio, nuovo, nomeA, nomeB) {
+    try {
+      const d = await api.driftOpenapi(vecchio, nuovo);
+      logga("info", `Drift OpenAPI (${nomeA} → ${nomeB}): +${d.aggiunti.length} / -${d.rimossi.length} / ~${d.modificati.length}`);
+      for (const x of d.aggiunti) logga("ok", `+ aggiunto: ${x}`);
+      for (const x of d.rimossi) logga("errore", `- rimosso: ${x}`);
+      for (const x of d.modificati) logga("info", `~ modificato: ${x}`);
+      if (!d.aggiunti.length && !d.rimossi.length && !d.modificati.length) logga("ok", "Nessuna differenza tra gli spec.");
+    } catch (e) { logga("errore", `Drift fallito: ${e}`); }
+  }
+
   // Genera la documentazione HTML e la scarica come file.
   async function esportaDoc() {
     try {
@@ -185,7 +246,7 @@
       // Copia di lavoro: pre/post-script non alterano la richiesta salvata.
       const req = $state.snapshot(t.richiesta);
       const pre = eseguiPre(req.pre_script, { req, vars });
-      t.risposta = await api.inviaRichiesta(req, vars);
+      t.risposta = await api.inviaRichiesta(req, vars, t.dir || null);
       // Asserzioni dichiarative (backend) + post-script (pm.test).
       let tests = [];
       if (req.tests?.length) tests = await api.valutaTest(req.tests, t.risposta);
@@ -433,6 +494,9 @@
           onEsporta={esportaCollezione}
           onImporta={importaCollezione}
           onGeneraDoc={esportaDoc}
+          onTrovaSostituisci={trovaSostituisci}
+          onDrift={confrontaDrift}
+          onConfigCartella={apriConfigCartella}
         />
       {:else if vista === "run"}
         <RunView {albero} onEsegui={eseguiRun} />
@@ -495,6 +559,13 @@
           {:else}
             <RunResults titolo={tabAttivo.titolo} risultati={tabAttivo.risultati} />
           {/if}
+        {:else if tabAttivo.tipo === "cartella"}
+          <FolderConfig
+            dir={tabAttivo.dir}
+            nome={tabAttivo.nome}
+            config={tabAttivo.config}
+            onSalva={salvaConfigCartella}
+          />
         {:else}
           <div class="req-area" style="grid-template-columns: 1fr 5px {layout.right}px">
             <div class="editor-col">
@@ -520,6 +591,8 @@
                 inCorso={tabAttivo.inCorso}
                 errore={tabAttivo.errore}
                 risultatiTest={tabAttivo.risultatiTest}
+                onCapturaVar={capturaVar}
+                onCreaTest={creaTest}
               />
               <Splitter direction="row" onResize={(d) => ridimensiona("perf", -d, 120, 700)} />
               <Performance richiesta={tabAttivo.richiesta} variabili={variabiliAttive} />

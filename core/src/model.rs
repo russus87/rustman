@@ -178,6 +178,16 @@ pub enum Nodo {
     },
 }
 
+/// Configurazione ereditabile di una cartella/collezione: header e auth applicati
+/// alle richieste figlie (salvata in `<cartella>/_rustman.json`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConfigCartella {
+    #[serde(default)]
+    pub headers: Vec<Header>,
+    #[serde(default)]
+    pub auth: Auth,
+}
+
 /// Una collezione = una cartella di primo livello, con i suoi figli (cartelle/richieste).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Collezione {
@@ -274,6 +284,18 @@ pub struct EsportaCollezione {
 
 fn versione_uno() -> u32 {
     1
+}
+
+/// Report del confronto fra due spec OpenAPI (drift detection).
+/// Ogni voce è una stringa tipo "GET /pets".
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DriftReport {
+    /// Operazioni presenti solo nel nuovo spec.
+    pub aggiunti: Vec<String>,
+    /// Operazioni presenti solo nel vecchio spec.
+    pub rimossi: Vec<String>,
+    /// Operazioni presenti in entrambi ma con parametri/corpo cambiati.
+    pub modificati: Vec<String>,
 }
 
 /// Esito di un import: dice al frontend cosa è stato creato, così può

@@ -12,9 +12,11 @@
 //! Il JSON è "pretty" (indentato) così i diff di Git restano puliti.
 
 use crate::model::{
-    Albero, Auth, Catena, CatenaSuDisco, Collezione, Environment, EnvironmentSuDisco,
-    EsportaCollezione, Nodo, NodoExport, Richiesta, RisultatoImport, Variabile, VoceStoria,
+    Albero, Auth, Catena, CatenaSuDisco, Collezione, ConfigCartella, Environment,
+    EnvironmentSuDisco, EsportaCollezione, Header, Nodo, NodoExport, Richiesta, RisultatoImport,
+    Variabile, VoceStoria,
 };
+use crate::har;
 use crate::openapi;
 use crate::postman::{self, ImportPostman};
 use std::collections::HashMap;
@@ -32,6 +34,8 @@ const FILE_SECRETS: &str = ".rustman-secrets.json";
 const FILE_HISTORY: &str = ".rustman-history.json";
 /// Numero massimo di voci di cronologia conservate.
 const MAX_STORIA: usize = 200;
+/// File di configurazione ereditabile dentro una cartella/collezione.
+const FILE_CARTELLA: &str = "_rustman.json";
 
 /// Archivio dei segreti: file dell'ambiente → (chiave variabile → valore).
 type ArchivioSegreti = HashMap<String, HashMap<String, String>>;
@@ -386,6 +390,122 @@ pub fn pulisci_storia(root: &Path) -> io::Result<()> {
     Ok(())
 }
 
+// ===================== Find & Replace ========================================
+
+/// Cerca e sostituisce un testo nei campi delle richieste di tutte le collezioni
+/// (url, body, chiavi/valori di header e params, token/utente auth). Salva i file
+/// modificati e restituisce quante richieste sono state toccate.
+pub fn trova_sostituisci(root: &Path, cerca: &str, con: &str) -> io::Result<usize> {
+    if cerca.is_empty() {
+        return Ok(0);
+    }
+    let albero = carica_albero(root)?;
+    let mut totale = 0;
+    for coll in &albero {
+        totale += sostituisci_in_nodi(root, &coll.figli, cerca, con)?;
+    }
+    Ok(totale)
+}
+
+fn sostituisci_in_nodi(root: &Path, figli: &[Nodo], cerca: &str, con: &str) -> io::Result<usize> {
+    let mut n = 0;
+    for nodo in figli {
+        match nodo {
+            Nodo::Cartella { figli, .. } => n += sostituisci_in_nodi(root, figli, cerca, con)?,
+            Nodo::Richiesta { file, richiesta, .. } => {
+                let mut r = richiesta.clone();
+                let mut cambiato = false;
+                let mut applica = |s: &mut String| {
+                    if s.contains(cerca) {
+                        *s = s.replace(cerca, con);
+                        cambiato = true;
+                    }
+                };
+                applica(&mut r.url);
+                applica(&mut r.body);
+                applica(&mut r.auth.token);
+                applica(&mut r.auth.utente);
+                for h in r.headers.iter_mut().chain(r.params.iter_mut()) {
+                    applica(&mut h.chiave);
+                    applica(&mut h.valore);
+                }
+                if cambiato {
+                    let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+                    salva_richiesta(root, dir, Some(file), &r)?;
+                    n += 1;
+                }
+            }
+        }
+    }
+    Ok(n)
+}
+
+// ===================== Ereditarietà di cartella ==============================
+
+/// Carica la configurazione ereditabile di una cartella (vuota se assente).
+pub fn carica_config_cartella(root: &Path, dir: &str) -> ConfigCartella {
+    fs::read_to_string(root.join(dir).join(FILE_CARTELLA))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Salva la configurazione ereditabile di una cartella.
+pub fn salva_config_cartella(root: &Path, dir: &str, cfg: &ConfigCartella) -> io::Result<()> {
+    fs::create_dir_all(root.join(dir))?;
+    let testo = serde_json::to_string_pretty(cfg)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(root.join(dir).join(FILE_CARTELLA), testo)
+}
+
+/// Applica alla richiesta gli header e l'auth ereditati dalle cartelle antenate
+/// (`dir` è la cartella che contiene la richiesta). Gli header propri della
+/// richiesta hanno la precedenza; l'auth ereditata si usa solo se quella della
+/// richiesta è "none". Le cartelle più interne vincono su quelle più esterne.
+pub fn eredita(root: &Path, dir: &str, richiesta: &Richiesta) -> Richiesta {
+    // Header ereditati: mappa chiave(lowercase) → header, dall'esterno all'interno.
+    let mut ered: Vec<(String, Header)> = Vec::new();
+    let mut auth_ered: Option<Auth> = None;
+
+    let mut prefisso = String::new();
+    for parte in dir.split('/').filter(|s| !s.is_empty()) {
+        if !prefisso.is_empty() {
+            prefisso.push('/');
+        }
+        prefisso.push_str(parte);
+        let cfg = carica_config_cartella(root, &prefisso);
+        for h in cfg.headers {
+            if h.chiave.is_empty() {
+                continue;
+            }
+            let k = h.chiave.to_lowercase();
+            ered.retain(|(ek, _)| ek != &k); // l'interno sovrascrive l'esterno
+            ered.push((k, h));
+        }
+        if cfg.auth.tipo != "none" {
+            auth_ered = Some(cfg.auth);
+        }
+    }
+
+    let mut r = richiesta.clone();
+    // Header propri della richiesta: vincono per chiave.
+    let chiavi_req: std::collections::HashSet<String> =
+        r.headers.iter().map(|h| h.chiave.to_lowercase()).collect();
+    let da_aggiungere: Vec<Header> = ered
+        .into_iter()
+        .filter(|(k, _)| !chiavi_req.contains(k))
+        .map(|(_, h)| h)
+        .collect();
+    r.headers.extend(da_aggiungere);
+
+    if r.auth.tipo == "none" {
+        if let Some(a) = auth_ered {
+            r.auth = a;
+        }
+    }
+    r
+}
+
 // ===================== Run / catene di chiamate ==============================
 
 /// Carica tutte le catene dalla cartella `runs/`.
@@ -476,6 +596,10 @@ pub fn importa(root: &Path, contenuto: &str) -> io::Result<RisultatoImport> {
     // 1) OpenAPI/Swagger (gestisce anche YAML).
     if let Some((esporta, env)) = openapi::riconosci(contenuto) {
         return salva_collezione_con_env(root, &esporta, env);
+    }
+    // 1-bis) HAR (export di rete del browser).
+    if let Some(esporta) = har::riconosci(contenuto) {
+        return salva_collezione_con_env(root, &esporta, None);
     }
     // 2) Postman (collection o environment).
     match postman::riconosci(contenuto) {
@@ -672,6 +796,50 @@ mod tests {
         // Eliminando l'ambiente spariscono anche i suoi segreti.
         elimina_environment(root, &rel).unwrap();
         assert!(carica_segreti(root).get(&rel).is_none());
+    }
+
+    #[test]
+    fn find_replace_su_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        crea_collezione(root, "API").unwrap();
+        let mut r = richiesta("Get");
+        r.url = "https://vecchio.test/v1".into();
+        salva_richiesta(root, "api", None, &r).unwrap();
+
+        let n = trova_sostituisci(root, "vecchio.test", "nuovo.test").unwrap();
+        assert_eq!(n, 1);
+        let albero = carica_albero(root).unwrap();
+        let Nodo::Richiesta { richiesta, .. } = &albero[0].figli[0] else { panic!() };
+        assert_eq!(richiesta.url, "https://nuovo.test/v1");
+    }
+
+    #[test]
+    fn ereditarieta_header_e_auth() {
+        use crate::model::ConfigCartella;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        crea_collezione(root, "API").unwrap();
+        crea_cartella(root, "api", "Admin").unwrap();
+        salva_richiesta(root, "api/admin", None, &richiesta("Ban")).unwrap();
+
+        // Config sulla collezione: header + bearer.
+        let cfg = ConfigCartella {
+            headers: vec![Header { chiave: "X-App".into(), valore: "rustman".into(), attivo: true }],
+            auth: Auth { tipo: "bearer".into(), token: "T".into(), ..Auth::default() },
+        };
+        salva_config_cartella(root, "api", &cfg).unwrap();
+
+        let albero = carica_albero(root).unwrap();
+        let Nodo::Cartella { figli, .. } = &albero[0].figli[0] else { panic!() };
+        let Nodo::Richiesta { richiesta, .. } = &figli[0] else { panic!() };
+
+        let r = eredita(root, "api/admin", richiesta);
+        assert!(r.headers.iter().any(|h| h.chiave == "X-App" && h.valore == "rustman"));
+        assert_eq!(r.auth.tipo, "bearer");
+        assert_eq!(r.auth.token, "T");
+        // Il file di config non deve comparire come richiesta.
+        assert_eq!(figli.len(), 1);
     }
 
     #[test]
