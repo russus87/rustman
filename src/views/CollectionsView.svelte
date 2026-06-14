@@ -22,6 +22,7 @@
     onDiffColl,
     onConfigCartella,
     onCoverage,
+    onLint,
     onEseguiBatch,
     onEsportaWs,
     onImportaWs,
@@ -102,6 +103,13 @@
   let covInput;
   let collDiffInput;
   let wsInput;
+  let lintInput;
+
+  async function suLintFile(e) {
+    const f = e.target.files?.[0];
+    if (f) await onLint?.(await f.text(), f.name);
+    e.target.value = "";
+  }
 
   async function suWsFile(e) {
     const f = e.target.files?.[0];
@@ -195,7 +203,11 @@
     <span class="side-add" title="Diff di due collezioni (.rustman.json): scegli 2 file" onclick={() => collDiffInput.click()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v18M15 3v18M4 8h5M15 8h5M4 16h5M15 16h5"/></svg>
     </span>
+    <span class="side-add" title="Lint di uno spec OpenAPI" onclick={() => lintInput.click()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+    </span>
     <input type="file" accept=".json,.yaml,.yml" style="display:none" bind:this={covInput} onchange={suCovFile} />
+    <input type="file" accept=".json,.yaml,.yml" style="display:none" bind:this={lintInput} onchange={suLintFile} />
     <span class="side-add" title="Esporta tutto il workspace (bundle)" onclick={() => onEsportaWs?.()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
     </span>

@@ -400,6 +400,14 @@ pub struct RisultatoRun {
     pub tests: Vec<RisultatoTest>,
 }
 
+/// Un problema rilevato dal lint di uno spec OpenAPI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LintIssue {
+    /// "errore" | "avviso".
+    pub livello: String,
+    pub messaggio: String,
+}
+
 /// Un cookie visto in una risposta (per il cookie inspector).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CookieInfo {

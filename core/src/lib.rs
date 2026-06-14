@@ -6,6 +6,7 @@ pub mod doc;
 pub mod git;
 pub mod har;
 pub mod http;
+pub mod jsonpath;
 pub mod jsonschema;
 pub mod model;
 pub mod oauth;

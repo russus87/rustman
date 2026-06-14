@@ -3,12 +3,12 @@
 //! il percorso del workspace (la cartella, anche repo git, dove vivono le collection).
 
 use rustman_core::{
-    codegen, curl, doc, git, http,
+    codegen, curl, doc, git, http, jsonschema,
     model::{
         Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CookieInfo,
-        CoverageReport, DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf,
-        Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta,
-        RunSummary, SecurityAvviso, StatoRepo, Variabile, VoceStoria,
+        CoverageReport, DriftReport, Environment, EnvironmentSuDisco, FileModificato, LintIssue,
+        OpzioniPerf, Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun,
+        RisultatoTest, Risposta, RunSummary, SecurityAvviso, StatoRepo, Variabile, VoceStoria,
     },
     oauth, openapi, perf, report, security, storage, test, textdiff, vars,
 };
@@ -184,6 +184,28 @@ fn drift_openapi(vecchio: String, nuovo: String) -> Result<DriftReport, String> 
 #[tauri::command]
 fn diff_collezioni(vecchio: String, nuovo: String) -> Result<DriftReport, String> {
     storage::diff_collezioni(&vecchio, &nuovo).ok_or_else(|| "collezione non valida".to_string())
+}
+
+/// Inferisce un JSON Schema da un corpo di risposta JSON.
+#[tauri::command]
+fn inferisci_schema(body: String) -> Result<String, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(&body).map_err(|_| "la risposta non è JSON".to_string())?;
+    let schema = jsonschema::inferisci(&v);
+    serde_json::to_string(&schema).map_err(|e| e.to_string())
+}
+
+/// Lint di uno spec OpenAPI: elenco dei problemi rilevati.
+#[tauri::command]
+fn lint_openapi(spec: String) -> Result<Vec<LintIssue>, String> {
+    openapi::lint(&spec).ok_or_else(|| "spec OpenAPI non valido".to_string())
+}
+
+/// Carica la baseline dello snapshot di una richiesta (per il diff inline).
+#[tauri::command]
+fn carica_snapshot(app: tauri::AppHandle, file: String) -> Result<Option<String>, String> {
+    let root = workspace(&app)?;
+    Ok(storage::carica_snapshot(&root, &file))
 }
 
 /// Carica la configurazione ereditabile di una cartella/collezione.
@@ -686,6 +708,9 @@ pub fn run() {
             trova_sostituisci,
             drift_openapi,
             diff_collezioni,
+            inferisci_schema,
+            lint_openapi,
+            carica_snapshot,
             carica_config_cartella,
             salva_config_cartella,
             variabili_cartella,

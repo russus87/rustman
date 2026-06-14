@@ -4,7 +4,32 @@
 //! `enum`, `nullable` (stile OpenAPI). Non risolve i `$ref` (gli schemi vanno
 //! già espansi; l'import OpenAPI lo fa).
 
-use serde_json::Value;
+use serde_json::{json, Value};
+
+/// Inferisce un JSON Schema (bozza) da un valore JSON di esempio.
+pub fn inferisci(v: &Value) -> Value {
+    match v {
+        Value::Null => json!({ "type": "string", "nullable": true }),
+        Value::Bool(_) => json!({ "type": "boolean" }),
+        Value::Number(n) => {
+            json!({ "type": if n.is_i64() || n.is_u64() { "integer" } else { "number" } })
+        }
+        Value::String(_) => json!({ "type": "string" }),
+        Value::Array(a) => {
+            let items = a.first().map(inferisci).unwrap_or_else(|| json!({}));
+            json!({ "type": "array", "items": items })
+        }
+        Value::Object(m) => {
+            let mut props = serde_json::Map::new();
+            let mut required = Vec::new();
+            for (k, val) in m {
+                props.insert(k.clone(), inferisci(val));
+                required.push(k.clone());
+            }
+            json!({ "type": "object", "properties": props, "required": required })
+        }
+    }
+}
 
 /// Valida `dato` contro `schema`. Restituisce la lista degli errori (vuota = ok).
 /// `percorso` è usato internamente per messaggi tipo "data.items[0].id".
@@ -136,5 +161,16 @@ mod tests {
     fn nullable_ammette_null() {
         let schema = json!({ "type": "string", "nullable": true });
         assert!(valida(&schema, &Value::Null).is_empty());
+    }
+
+    #[test]
+    fn inferisci_e_valida_roundtrip() {
+        let dato = json!({ "id": 1, "nome": "Mario", "tags": ["a", "b"] });
+        let schema = inferisci(&dato);
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["id"]["type"], "integer");
+        assert_eq!(schema["properties"]["tags"]["type"], "array");
+        // Lo schema inferito valida il dato originale.
+        assert!(valida(&schema, &dato).is_empty());
     }
 }

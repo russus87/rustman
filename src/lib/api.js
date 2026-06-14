@@ -49,6 +49,9 @@ export const anteprima = (testo, variabili) =>
 export const trovaSostituisci = (cerca, con) => call("trova_sostituisci", { cerca, con });
 export const driftOpenapi = (vecchio, nuovo) => call("drift_openapi", { vecchio, nuovo });
 export const diffCollezioni = (vecchio, nuovo) => call("diff_collezioni", { vecchio, nuovo });
+export const inferisciSchema = (body) => call("inferisci_schema", { body });
+export const lintOpenapi = (spec) => call("lint_openapi", { spec });
+export const caricaSnapshot = (file) => call("carica_snapshot", { file });
 export const caricaConfigCartella = (dir) => call("carica_config_cartella", { dir });
 export const salvaConfigCartella = (dir, config) =>
   call("salva_config_cartella", { dir, config });

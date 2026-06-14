@@ -12,7 +12,7 @@
 
 use crate::model::{
     Asserzione, Auth, CampoForm, Collezione, CoverageReport, DriftReport, Environment,
-    EsportaCollezione, Header, MockRoute, Nodo, NodoExport, Richiesta, Variabile,
+    EsportaCollezione, Header, LintIssue, MockRoute, Nodo, NodoExport, Richiesta, Variabile,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -104,6 +104,51 @@ pub fn mock_routes(contenuto: &str) -> Option<Vec<MockRoute>> {
         }
     }
     Some(routes)
+}
+
+/// Esegue un lint dello spec OpenAPI e restituisce i problemi rilevati.
+/// `None` se il contenuto non è uno spec valido.
+pub fn lint(contenuto: &str) -> Option<Vec<LintIssue>> {
+    let spec: Spec = serde_json::from_str(contenuto)
+        .ok()
+        .or_else(|| serde_yaml::from_str(contenuto).ok())?;
+    if spec.openapi.is_empty() && spec.swagger.is_empty() {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut avviso = |liv: &str, msg: String| out.push(LintIssue { livello: liv.into(), messaggio: msg });
+
+    if spec.info.title.trim().is_empty() {
+        avviso("avviso", "info.title mancante".into());
+    }
+    if spec.paths.is_empty() {
+        avviso("errore", "nessun path definito".into());
+    }
+    if spec.servers.is_empty() && spec.host.is_empty() {
+        avviso("avviso", "nessun server/host definito".into());
+    }
+
+    let mut visti: HashSet<String> = HashSet::new();
+    for (path, item) in &spec.paths {
+        for (metodo, op) in item.operazioni() {
+            let Some(op) = op else { continue };
+            let dove = format!("{} {path}", metodo.to_uppercase());
+            if op.responses.is_empty() {
+                avviso("errore", format!("{dove}: nessuna response definita"));
+            }
+            if op.operation_id.trim().is_empty() {
+                avviso("avviso", format!("{dove}: operationId mancante"));
+            } else if !visti.insert(op.operation_id.clone()) {
+                avviso("errore", format!("operationId duplicato: {}", op.operation_id));
+            }
+            for p in &op.parameters {
+                if p.name.trim().is_empty() {
+                    avviso("avviso", format!("{dove}: parametro senza nome"));
+                }
+            }
+        }
+    }
+    Some(out)
 }
 
 /// Esporta l'albero delle collezioni in uno spec OpenAPI 3.0 (JSON).

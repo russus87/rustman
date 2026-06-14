@@ -175,6 +175,37 @@
     } catch { /* body non JSON */ }
     logga("ok", `${n} asserzioni generate dalla risposta`);
   }
+  // Crea un'asserzione "schema" inferendo lo schema dalla risposta.
+  async function autoSchema(risposta) {
+    const t = tabAttivo;
+    if (!t || t.tipo !== "request") return;
+    try {
+      const schema = await api.inferisciSchema(risposta.body);
+      if (!t.richiesta.tests) t.richiesta.tests = [];
+      t.richiesta.tests.push({ tipo: "schema", operatore: "", campo: "", atteso: schema, attivo: true });
+      logga("ok", "Asserzione schema generata dalla risposta");
+    } catch (e) { logga("errore", `Inferisci schema fallito: ${e}`); }
+  }
+  // Snapshot inline: diff tra baseline e risposta attuale.
+  async function snapshotDiff() {
+    const t = tabAttivo;
+    if (!t || !t.file || !t.risposta) return;
+    try {
+      const base = (await api.caricaSnapshot(t.file)) ?? "";
+      const righe = await api.diffTesti(base, t.risposta.body);
+      const tab = { id: prossimoId++, tipo: "diff", file: null, titolo: `Snapshot · ${t.richiesta.nome || "richiesta"}`, righe };
+      tabs.push(tab); tabAttivoId = tab.id;
+    } catch (e) { logga("errore", `Diff snapshot fallito: ${e}`); }
+  }
+  async function snapshotAccetta() {
+    const t = tabAttivo;
+    if (!t || !t.file || !t.risposta) return;
+    try {
+      await api.aggiornaSnapshot(t.file, t.risposta.body);
+      segnaleGit++;
+      logga("ok", "Snapshot aggiornato");
+    } catch (e) { logga("errore", `Aggiorna snapshot fallito: ${e}`); }
+  }
   // Crea un'asserzione json sul tab attivo dal campo catturato.
   function creaTest(path, value) {
     const t = tabAttivo;
@@ -381,6 +412,16 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       logga("ok", "Spec OpenAPI esportato");
     } catch (e) { logga("errore", `Export OpenAPI fallito: ${e}`); }
+  }
+
+  // Lint di uno spec OpenAPI: mostra i problemi nel pannello Log.
+  async function lintDaSpec(spec, nome) {
+    try {
+      const issues = await api.lintOpenapi(spec);
+      if (!issues.length) { logga("ok", `Lint (${nome}): nessun problema`); return; }
+      logga("info", `Lint (${nome}): ${issues.length} rilievi`);
+      for (const i of issues) logga(i.livello === "errore" ? "errore" : "info", `${i.livello}: ${i.messaggio}`);
+    } catch (e) { logga("errore", `Lint fallito: ${e}`); }
   }
 
   // Diff fra due collezioni esportate (.rustman.json): mostra il report nel Log.
@@ -744,6 +785,7 @@
           onDiffColl={diffCollezioni}
           onConfigCartella={apriConfigCartella}
           onCoverage={coverageDaSpec}
+          onLint={lintDaSpec}
           onEseguiBatch={eseguiBatch}
           onEsportaWs={esportaWs}
           onImportaWs={importaWs}
@@ -857,6 +899,9 @@
                 onCapturaVar={capturaVar}
                 onCreaTest={creaTest}
                 onAutoTest={autoTest}
+                onAutoSchema={autoSchema}
+                onSnapshotDiff={snapshotDiff}
+                onSnapshotAccetta={snapshotAccetta}
               />
               <Splitter direction="row" onResize={(d) => ridimensiona("perf", -d, 120, 700)} />
               <Performance richiesta={tabAttivo.richiesta} variabili={variabiliAttive} />

@@ -3,6 +3,27 @@
   let { titolo, risultati = [] } = $props();
 
   const passati = $derived(risultati.filter((r) => r.ok).length);
+
+  function scarica(nome, contenuto, tipo) {
+    const blob = new Blob([contenuto], { type: tipo });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+  function esportaJson() {
+    scarica("run.json", JSON.stringify(risultati, null, 2), "application/json");
+  }
+  function esportaCsv() {
+    const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+    const righe = [["passo", "esito", "status", "tempo_ms", "test_ok", "test_tot", "errore"]];
+    for (const r of risultati) {
+      const tot = (r.tests || []).length;
+      const ok = (r.tests || []).filter((t) => t.passato).length;
+      righe.push([r.nome, r.saltato ? "skip" : r.ok ? "ok" : "fail", r.status ?? "", r.tempo ?? "", ok, tot, r.errore ?? ""].map(esc));
+    }
+    scarica("run.csv", righe.map((r) => r.join(",")).join("\n"), "text/csv");
+  }
 </script>
 
 <div class="rr">
@@ -11,6 +32,10 @@
     <span class="riepilogo {passati === risultati.length ? 'ok' : 'ko'}">
       {passati}/{risultati.length} passi ok
     </span>
+    {#if risultati.length}
+      <span class="exp" onclick={esportaCsv} title="Esporta CSV">CSV</span>
+      <span class="exp" onclick={esportaJson} title="Esporta JSON">JSON</span>
+    {/if}
   </div>
 
   <div class="rr-body">
@@ -55,6 +80,8 @@
   .riepilogo { margin-left: auto; font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 6px; }
   .riepilogo.ok { color: #56d364; background: rgba(63,185,80,.15); }
   .riepilogo.ko { color: #f8918c; background: rgba(248,81,73,.15); }
+  .exp { cursor: pointer; font-size: 11px; color: var(--txt-faint); border: 1px solid var(--border); border-radius: 5px; padding: 2px 8px; font-family: var(--mono); }
+  .exp:hover { color: var(--accent); border-color: var(--accent); }
   .rr-body { flex: 1; overflow: auto; padding: 12px 16px; }
   .passo { border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; margin-bottom: 10px; background: var(--panel-2); }
   .passo.ko { border-color: rgba(248,81,73,.4); }

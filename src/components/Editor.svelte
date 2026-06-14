@@ -106,10 +106,10 @@
   }
 
   // Asserzioni (test)
-  const tipiTest = ["status", "tempo", "header", "body", "json", "schema", "snapshot"];
+  const tipiTest = ["status", "tempo", "header", "body", "json", "jsonpath", "schema", "snapshot"];
   const operatori = ["==", "!=", "<", ">", "contiene"];
   function usaCampo(tipo) {
-    return tipo === "header" || tipo === "json";
+    return tipo === "header" || tipo === "json" || tipo === "jsonpath";
   }
   function aggiungiTest() {
     if (!richiesta.tests) richiesta.tests = [];
@@ -409,7 +409,7 @@
               <td style="width:1%"><select class="test-sel" bind:value={t.tipo}>{#each tipiTest as tt}<option value={tt}>{tt}</option>{/each}</select></td>
               <td style="width:1%"><select class="test-sel" bind:value={t.operatore}>{#each operatori as op}<option value={op}>{op}</option>{/each}</select></td>
               {#if usaCampo(t.tipo)}
-                <td><input class="inline-input" placeholder={t.tipo === "json" ? "path es. data.id" : "nome header"} bind:value={t.campo} /></td>
+                <td><input class="inline-input" placeholder={t.tipo === "json" ? "path es. data.id" : t.tipo === "jsonpath" ? "$.data.items[*].id" : "nome header"} bind:value={t.campo} /></td>
               {/if}
               <td><input class="inline-input" placeholder="valore atteso" bind:value={t.atteso} /></td>
               <td style="width:1%"><span class="rsp-icon" onclick={() => rimuoviTest(i)} title="Rimuovi">✕</span></td>

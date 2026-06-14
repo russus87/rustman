@@ -12,7 +12,7 @@ use axum::{
     Router,
 };
 use rustman_core::{
-    codegen, curl, doc, git, http,
+    codegen, curl, doc, git, http, jsonschema,
     model::{
         Asserzione, Auth, Catena, ConfigCartella, CookieInfo, Environment, OpzioniPerf, Richiesta,
         Risposta, RisultatoRun, RunSummary, Variabile, VoceStoria,
@@ -353,6 +353,24 @@ async fn h_diff_collezioni(
     storage::diff_collezioni(&r.vecchio, &r.nuovo)
         .map(Json)
         .ok_or_else(|| Errore("collezione non valida".into()))
+}
+
+#[derive(Deserialize)]
+struct BodyReq {
+    body: String,
+}
+async fn h_inferisci_schema(Json(r): Json<BodyReq>) -> Result<Json<String>, Errore> {
+    let v: serde_json::Value =
+        serde_json::from_str(&r.body).map_err(|_| Errore("la risposta non è JSON".into()))?;
+    Ok(Json(serde_json::to_string(&jsonschema::inferisci(&v)).unwrap_or_default()))
+}
+async fn h_lint_openapi(
+    Json(r): Json<CoverageReq>,
+) -> Result<Json<Vec<rustman_core::model::LintIssue>>, Errore> {
+    openapi::lint(&r.spec).map(Json).ok_or_else(|| Errore("spec OpenAPI non valido".into()))
+}
+async fn h_carica_snapshot(State(s): State<Stato>, Json(r): Json<FileReq>) -> Json<Option<String>> {
+    Json(storage::carica_snapshot(&s.root(), &r.file))
 }
 
 async fn h_carica_config_cartella(
@@ -729,6 +747,9 @@ async fn main() {
         .route("/api/trova_sostituisci", post(h_trova_sostituisci))
         .route("/api/drift_openapi", post(h_drift_openapi))
         .route("/api/diff_collezioni", post(h_diff_collezioni))
+        .route("/api/inferisci_schema", post(h_inferisci_schema))
+        .route("/api/lint_openapi", post(h_lint_openapi))
+        .route("/api/carica_snapshot", post(h_carica_snapshot))
         .route("/api/carica_config_cartella", post(h_carica_config_cartella))
         .route("/api/salva_config_cartella", post(h_salva_config_cartella))
         .route("/api/variabili_cartella", post(h_variabili_cartella))

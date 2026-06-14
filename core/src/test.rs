@@ -19,6 +19,11 @@ fn valuta_una(a: &Asserzione, risposta: &Risposta) -> RisultatoTest {
     if a.tipo == "schema" {
         return valida_schema(a, risposta);
     }
+    // "jsonpath": valuta un'espressione JSONPath sul body (passa se almeno un
+    // match soddisfa l'operatore).
+    if a.tipo == "jsonpath" {
+        return valuta_jsonpath(a, risposta);
+    }
 
     // Ricava il valore "ottenuto" in base al tipo di asserzione.
     let ottenuto: Option<String> = match a.tipo.as_str() {
@@ -95,6 +100,29 @@ fn valida_schema(a: &Asserzione, risposta: &Risposta) -> RisultatoTest {
             dettaglio: abbrevia(&errori.join("; ")),
         }
     }
+}
+
+/// Valuta un'asserzione JSONPath: estrae i match e verifica se almeno uno
+/// soddisfa l'operatore rispetto al valore atteso.
+fn valuta_jsonpath(a: &Asserzione, risposta: &Risposta) -> RisultatoTest {
+    let descrizione = format!("jsonpath '{}' {} {}", a.campo, a.operatore, a.atteso);
+    let radice: Value = match serde_json::from_str(&risposta.body) {
+        Ok(v) => v,
+        Err(_) => {
+            return RisultatoTest { descrizione, passato: false, dettaglio: "la risposta non è JSON".into() }
+        }
+    };
+    let matches = crate::jsonpath::estrai(&radice, &a.campo);
+    if matches.is_empty() {
+        return RisultatoTest { descrizione, passato: false, dettaglio: "nessun match".into() };
+    }
+    let come_str = |v: &Value| match v {
+        Value::String(s) => s.clone(),
+        altro => altro.to_string(),
+    };
+    let passato = matches.iter().any(|m| confronta(&come_str(m), &a.operatore, &a.atteso));
+    let dettaglio = format!("{} match · es. {}", matches.len(), abbrevia(&come_str(&matches[0])));
+    RisultatoTest { descrizione, passato, dettaglio }
 }
 
 /// Applica l'operatore tra valore ottenuto e atteso.

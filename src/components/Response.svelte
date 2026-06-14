@@ -1,6 +1,6 @@
 <script>
   // Pannello della risposta: mostra status, metriche, corpo, intestazioni ed esiti dei test.
-  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest } = $props();
+  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest, onAutoSchema, onSnapshotDiff, onSnapshotAccetta } = $props();
 
   let tab = $state("Body"); // Body | Headers | Tests
   let cattura = $state(false); // mostra l'elenco dei campi JSON catturabili
@@ -73,6 +73,7 @@
       <span class="resp-meta">{risposta.tempo_ms} ms</span>
       <span class="resp-meta">{dimensione(risposta.dimensione)}</span>
       <span class="gen-test" title="Genera asserzioni dalla risposta" onclick={() => onAutoTest?.(risposta)}>＋ test</span>
+      <span class="gen-test" title="Crea asserzione schema dalla risposta" onclick={() => onAutoSchema?.(risposta)}>＋ schema</span>
     {/if}
   </div>
 
@@ -179,6 +180,10 @@
           <div class="test-row">
             <span class="test-esito {t.passato ? 'ok' : 'ko'}">{t.passato ? "PASS" : "FAIL"}</span>
             <span class="test-desc">{t.descrizione}</span>
+            {#if t.descrizione === "snapshot" && !t.passato}
+              <span class="snap-act" onclick={() => onSnapshotDiff?.()}>diff</span>
+              <span class="snap-act ok" onclick={() => onSnapshotAccetta?.()}>✓ accetta</span>
+            {/if}
             <span class="test-det">{t.dettaglio}</span>
           </div>
         {/each}
@@ -218,6 +223,9 @@
   .sec-liv.info { color: #9aa7b8; background: var(--panel-3); }
   .gen-test { cursor: pointer; font-size: 11.5px; color: var(--txt-faint); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
   .gen-test:hover { color: var(--accent); border-color: var(--accent); }
+  .snap-act { cursor: pointer; font-size: 11px; color: var(--txt-faint); border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; }
+  .snap-act:hover { color: var(--accent); border-color: var(--accent); }
+  .snap-act.ok:hover { color: var(--green); border-color: var(--green); }
   .test-desc {
     font-family: var(--mono);
     color: var(--txt);

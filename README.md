@@ -21,7 +21,8 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **History** delle richieste inviate con **replay** e **diff** fra due risposte.
 - **Copia come codice** (cURL, fetch JS, Python requests) e import da un comando cURL.
 - **Variabili dinamiche**: `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomUUID}}`, `{{$randomInt}}`, `{{$randomFloat}}`, con anteprima dell'URL risolto.
-- **Contract testing**: asserzione `schema` (JSON Schema), popolata in automatico dall'import OpenAPI.
+- **Contract testing**: asserzione `schema` (JSON Schema), inferibile dalla risposta e
+  popolata dall'import OpenAPI; asserzioni **JSONPath**; **OpenAPI lint**.
 - **Command Palette** (Ctrl/Cmd+K) per aprire richieste, ambienti, viste e azioni.
 - **Ricerca/filtro** nell'albero, **tag** sulle richieste (e `--tag` in CLI),
   **batch send** con scheduler e **confronto** affiancato delle risposte.

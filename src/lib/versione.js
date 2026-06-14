@@ -1,9 +1,17 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.33.0";
+export const VERSIONE = "0.34.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.34.0",
+    voci: [
+      "Inferisci schema dalla risposta (+ schema) e asserzioni JSONPath ($.a[*].b).",
+      "Snapshot inline: diff e accetta la baseline dal pannello risposta.",
+      "OpenAPI lint e export dei risultati Run in CSV/JSON.",
+    ],
+  },
   {
     versione: "0.33.0",
     voci: [
