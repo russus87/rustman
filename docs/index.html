@@ -169,6 +169,7 @@
       <div class="nav-links">
         <a href="#features">Funzionalità</a>
         <a href="#download">Download</a>
+        <a href="https://github.com/russus87/rustman" target="_blank" rel="noopener">GitHub</a>
         <a class="nav-cta" href="#download">Scarica</a>
       </div>
     </div>
@@ -183,10 +184,11 @@
         <span class="badge">🦀 Rust</span>
         <span class="badge">⚡ Tauri</span>
         <span class="badge">🧡 Svelte</span>
+        <span class="badge">🆓 Open Source</span>
       </div>
       <div class="hero-actions">
         <a class="btn btn-primary" href="#download">⬇ Scarica ora</a>
-        <a class="btn btn-ghost" href="#features">Scopri le funzionalità</a>
+        <a class="btn btn-ghost" href="https://github.com/russus87/rustman" target="_blank" rel="noopener">★ Stella su GitHub</a>
       </div>
     </div>
   </header>
@@ -221,33 +223,33 @@
           <div class="os-ico">🍎</div>
           <h3>macOS</h3>
           <div class="arch">Apple Silicon (M1/M2/M3)</div>
-          <a class="btn btn-primary" data-dl="macos" href="#">⬇ Scarica .dmg</a>
+          <a class="btn btn-primary" data-dl="macos" href="https://github.com/russus87/rustman/releases/latest">⬇ Scarica .dmg</a>
           <div class="formats">.dmg · .app</div>
         </div>
         <div class="dl-card fade">
           <div class="os-ico">🐧</div>
           <h3>Linux</h3>
           <div class="arch">x86_64</div>
-          <a class="btn btn-primary" data-dl="linux" href="#">⬇ Scarica AppImage</a>
+          <a class="btn btn-primary" data-dl="linux" href="https://github.com/russus87/rustman/releases/latest">⬇ Scarica AppImage</a>
           <div class="formats">.AppImage · .deb · .rpm</div>
         </div>
         <div class="dl-card fade">
           <div class="os-ico">🪟</div>
           <h3>Windows</h3>
           <div class="arch">x64</div>
-          <a class="btn btn-primary" data-dl="windows" href="#">⬇ Scarica installer</a>
+          <a class="btn btn-primary" data-dl="windows" href="https://github.com/russus87/rustman/releases/latest">⬇ Scarica installer</a>
           <div class="formats">.exe (NSIS) · .msi</div>
         </div>
       </div>
-      <p class="dl-note" id="dl-version">Versione 0.9.0</p>
+      <p class="dl-note" id="dl-version">Tutte le release su <a href="https://github.com/russus87/rustman/releases" target="_blank" rel="noopener">GitHub</a>.</p>
     </div>
   </section>
 
   <footer>
     <div class="wrap">
       <div class="brand"><img src="logo.png" alt="" style="width:28px;height:28px;border-radius:7px" /> Rustman</div>
-      <p>Client API in Rust + Tauri + Svelte.</p>
-      <p style="margin-top:8px"><a href="#download">Download</a></p>
+      <p>Client API open source in Rust + Tauri + Svelte.</p>
+      <p style="margin-top:8px"><a href="https://github.com/russus87/rustman" target="_blank" rel="noopener">GitHub</a> · <a href="https://github.com/russus87/rustman/releases" target="_blank" rel="noopener">Releases</a> · <a href="https://github.com/russus87/rustman/issues" target="_blank" rel="noopener">Issues</a></p>
     </div>
   </footer>
 
@@ -258,29 +260,31 @@
     }, { threshold: 0.12 });
     document.querySelectorAll('.fade').forEach((el) => io.observe(el));
 
-    // ====================== CONFIGURAZIONE DOWNLOAD ======================
-    // Incolla qui gli URL diretti dei pacchetti DOPO averli caricati sul tuo
-    // host (Cloudflare R2, S3/B2, un repo pubblico separato, ecc.).
-    // Lascia "" per mostrare il bottone come "Presto disponibile".
-    const VERSIONE = "0.9.0";
-    const DOWNLOAD = {
-      macos:   "",  // es. "https://download.tuosito.com/Rustman_0.9.0_aarch64.dmg"
-      linux:   "",  // es. "https://download.tuosito.com/Rustman_0.9.0_amd64.AppImage"
-      windows: "",  // es. "https://download.tuosito.com/Rustman_0.9.0_x64-setup.exe"
+    // Aggancia i link diretti dei pacchetti dall'ultima release pubblicata su
+    // GitHub. Se fallisce (offline, rate limit, nessuna release) i bottoni
+    // restano puntati a /releases/latest.
+    const REPO = 'russus87/rustman';
+    const match = {
+      macos:   (n) => /\.dmg$/i.test(n),
+      linux:   (n) => /\.AppImage$/i.test(n),
+      windows: (n) => /-setup\.exe$/i.test(n) || /\.msi$/i.test(n),
     };
-    // =====================================================================
-
-    document.querySelectorAll('[data-dl]').forEach((btn) => {
-      const url = DOWNLOAD[btn.dataset.dl];
-      if (url) {
-        btn.href = url;
-      } else {
-        btn.removeAttribute('href');
-        btn.classList.add('disabilitato');
-        btn.textContent = 'Presto disponibile';
-      }
-    });
-    document.getElementById('dl-version').textContent = 'Versione ' + VERSIONE;
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((rel) => {
+        const assets = rel.assets || [];
+        Object.keys(match).forEach((os) => {
+          const a = assets.find((x) => match[os](x.name));
+          const btn = document.querySelector(`[data-dl="${os}"]`);
+          if (a && btn) btn.href = a.browser_download_url;
+        });
+        if (rel.tag_name) {
+          document.getElementById('dl-version').innerHTML =
+            `Versione <strong>${rel.tag_name}</strong> · tutte le release su ` +
+            `<a href="https://github.com/${REPO}/releases" target="_blank" rel="noopener">GitHub</a>.`;
+        }
+      })
+      .catch(() => { /* fallback: i bottoni puntano già a /releases/latest */ });
   </script>
 </body>
 </html>

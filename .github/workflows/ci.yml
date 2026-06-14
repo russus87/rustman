@@ -1,0 +1,42 @@
+# Test e build a ogni push/PR (le release sui tag stanno in release.yml).
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # Test del core e compilazione di server/cli (escludiamo `app`, l'app
+      # Tauri che richiede le librerie GUI di sistema: viene compilata in release.yml).
+      - name: Test (core) + build (server, cli)
+        run: |
+          cargo test -p rustman-core
+          cargo build -p rustman-server -p rustman-cli
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build

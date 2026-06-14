@@ -1,5 +1,10 @@
 # Rustman
 
+[![Release](https://github.com/russus87/rustman/actions/workflows/release.yml/badge.svg)](https://github.com/russus87/rustman/actions/workflows/release.yml)
+[![CI](https://github.com/russus87/rustman/actions/workflows/ci.yml/badge.svg)](https://github.com/russus87/rustman/actions/workflows/ci.yml)
+[![Latest tag](https://img.shields.io/github/v/tag/russus87/rustman?label=versione&sort=semver)](https://github.com/russus87/rustman/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelte**.
 
 ## Funzionalità
@@ -96,3 +101,6 @@ soglia) e `--flaky <n>` (riesegue i test e segnala quelli instabili).
 - `server/` — server web (Axum) che espone `core` via REST.
 - `cli/` — esecutore headless (`rustman`) per la CI.
 - `src/` — frontend Svelte.
+
+## Licenza
+Distribuito sotto licenza [MIT](LICENSE).
