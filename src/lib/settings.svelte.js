@@ -2,7 +2,7 @@
 // Funziona sia su desktop (Tauri) sia su web.
 
 const CHIAVE = "rustman_settings";
-const DEFAULT = { autosave: false, autosaveMs: 1000 };
+const DEFAULT = { autosave: false, autosaveMs: 1000, tema: "scuro", accento: "#7c5cff" };
 
 function carica() {
   try {
@@ -19,6 +19,19 @@ export const settings = $state(carica());
 export function salvaSettings() {
   localStorage.setItem(
     CHIAVE,
-    JSON.stringify({ autosave: settings.autosave, autosaveMs: settings.autosaveMs }),
+    JSON.stringify({
+      autosave: settings.autosave,
+      autosaveMs: settings.autosaveMs,
+      tema: settings.tema,
+      accento: settings.accento,
+    }),
   );
+}
+
+// Applica tema e accento al documento (variabili CSS).
+export function applicaTema() {
+  const root = document.documentElement;
+  root.dataset.tema = settings.tema === "chiaro" ? "light" : "dark";
+  root.style.setProperty("--accent", settings.accento);
+  root.style.setProperty("--accent-2", settings.accento);
 }

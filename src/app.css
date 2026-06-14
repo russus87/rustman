@@ -25,6 +25,21 @@
   --mono:"JetBrains Mono","SF Mono",ui-monospace,"Cascadia Code",Menlo,monospace;
   --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }
+
+/* ====== Tema chiaro ====== */
+:root[data-tema="light"]{
+  --bg:#f5f6f9;
+  --rail:#e9ebf1;
+  --panel:#ffffff;
+  --panel-2:#f3f4f8;
+  --panel-3:#e9ebf1;
+  --border:#dfe2ea;
+  --border-2:#cdd2dd;
+  --txt:#1b1e26;
+  --txt-dim:#5b6273;
+  --txt-faint:#9aa0b0;
+  --shadow:0 8px 30px rgba(20,22,40,.12);
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{

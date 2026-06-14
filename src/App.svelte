@@ -2,7 +2,7 @@
   // Componente principale: barra attività + vista nella sidebar + area centrale a tab.
   import { onMount } from "svelte";
   import * as api from "./lib/api.js";
-  import { settings } from "./lib/settings.svelte.js";
+  import { settings, applicaTema } from "./lib/settings.svelte.js";
   import { eseguiPre, eseguiPost, rispostaToRes } from "./lib/pm.js";
   import { eseguiCatena } from "./lib/runner.js";
   import { layout, ridimensiona } from "./lib/layout.svelte.js";
@@ -23,6 +23,7 @@
   import Socket from "./components/Socket.svelte";
   import BatchResults from "./components/BatchResults.svelte";
   import Strumenti from "./components/Strumenti.svelte";
+  import CheatSheet from "./components/CheatSheet.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -81,6 +82,7 @@
     try { await api.pulisciStoria(); storia = []; } catch (e) { console.error(e); }
   }
   onMount(async () => {
+    applicaTema();
     await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns()]);
   });
 
@@ -577,6 +579,7 @@
 
   // ---------------- Command Palette (Ctrl/Cmd+K) ----------------
   let paletteAperta = $state(false);
+  let cheatAperto = $state(false);
 
   // Tutte le richieste dell'albero, appiattite (file, nome, collezione).
   function appiattisci(figli, acc) {
@@ -616,6 +619,7 @@
     out.push({ tag: "🔌", label: "Nuova connessione WebSocket", azione: () => nuovaConnessione("ws") });
     out.push({ tag: "🔌", label: "Nuova connessione SSE", azione: () => nuovaConnessione("sse") });
     out.push({ tag: "🧰", label: "Apri Strumenti (JWT, Base64, HMAC, import…)", azione: apriStrumenti });
+    out.push({ tag: "⌨", label: "Scorciatoie da tastiera", azione: () => (cheatAperto = true) });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
     // Confronto affiancato: diff della risposta attiva con un altro tab.
     if (tabAttivo?.tipo === "request" && tabAttivo.risposta) {
@@ -792,4 +796,7 @@
 
 {#if paletteAperta}
   <CommandPalette {comandi} onChiudi={() => (paletteAperta = false)} />
+{/if}
+{#if cheatAperto}
+  <CheatSheet onChiudi={() => (cheatAperto = false)} />
 {/if}

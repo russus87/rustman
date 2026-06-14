@@ -26,6 +26,18 @@
 
   let nuovaColl = $state({ attiva: false, nome: "" });
   let cerca = $state("");
+  // Filtri salvati ("smart folders"), persistiti in localStorage.
+  let filtri = $state(JSON.parse(localStorage.getItem("rustman_filtri") || "[]"));
+  function salvaFiltro() {
+    const q = cerca.trim();
+    if (!q || filtri.includes(q)) return;
+    filtri = [...filtri, q];
+    localStorage.setItem("rustman_filtri", JSON.stringify(filtri));
+  }
+  function rimuoviFiltro(f) {
+    filtri = filtri.filter((x) => x !== f);
+    localStorage.setItem("rustman_filtri", JSON.stringify(filtri));
+  }
 
   // True se una richiesta combacia col testo cercato (nome/url/metodo/tag).
   function combacia(r, q) {
@@ -173,8 +185,22 @@
 
 {#if albero.length > 0}
   <div style="padding:6px 12px">
-    <input style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--txt);font-size:12px;outline:none"
-      placeholder="🔍 filtra (nome, url, metodo, tag)…" bind:value={cerca} />
+    <div style="display:flex;gap:6px;align-items:center">
+      <input style="flex:1;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--txt);font-size:12px;outline:none"
+        placeholder="🔍 filtra (nome, url, metodo, tag)…" bind:value={cerca} />
+      {#if cerca.trim()}
+        <span style="cursor:pointer;color:var(--txt-faint)" title="Salva come filtro" onclick={salvaFiltro}>💾</span>
+      {/if}
+    </div>
+    {#if filtri.length}
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
+        {#each filtri as f}
+          <span style="display:inline-flex;align-items:center;gap:4px;background:var(--panel-3);border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:11px;cursor:pointer" onclick={() => (cerca = f)}>
+            🏷 {f}<span style="color:var(--txt-faint)" onclick={(e) => { e.stopPropagation(); rimuoviFiltro(f); }}>✕</span>
+          </span>
+        {/each}
+      </div>
+    {/if}
   </div>
 {/if}
 

@@ -1,14 +1,36 @@
 <script>
-  // Vista "Settings": preferenze dell'app (per ora l'autosalvataggio).
-  import { settings, salvaSettings } from "../lib/settings.svelte.js";
+  // Vista "Settings": preferenze dell'app (autosalvataggio, tema, accento).
+  import { settings, salvaSettings, applicaTema } from "../lib/settings.svelte.js";
 
   function aggiorna() {
     salvaSettings();
   }
+  function aggiornaTema() {
+    salvaSettings();
+    applicaTema();
+  }
+  const accenti = ["#7c5cff", "#3fb950", "#f74c00", "#388bfd", "#39d0d8", "#e3a008", "#f85149"];
 </script>
 
 <div class="set-head">SETTINGS</div>
 <div class="set-body">
+  <div class="campo">
+    <span>Tema</span>
+    <select bind:value={settings.tema} onchange={aggiornaTema}>
+      <option value="scuro">Scuro</option>
+      <option value="chiaro">Chiaro</option>
+    </select>
+  </div>
+  <div class="campo">
+    <span>Accento</span>
+    <div class="accenti">
+      {#each accenti as c}
+        <span class="pallino" class:on={settings.accento === c} style="background:{c}"
+          onclick={() => { settings.accento = c; aggiornaTema(); }}></span>
+      {/each}
+    </div>
+  </div>
+
   <label class="opzione">
     <input type="checkbox" bind:checked={settings.autosave} onchange={aggiorna} />
     <span>
@@ -35,4 +57,8 @@
   .campo { display: flex; align-items: center; gap: 10px; color: var(--txt-dim); font-size: 12.5px; }
   .campo input { width: 90px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; color: var(--txt); font-family: var(--mono); outline: none; }
   .campo input:focus { border-color: var(--accent); }
+  .campo select { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; color: var(--txt); outline: none; }
+  .accenti { display: flex; gap: 8px; }
+  .pallino { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .pallino.on { border-color: var(--txt); }
 </style>

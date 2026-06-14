@@ -1,9 +1,16 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.26.0";
+export const VERSIONE = "0.27.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.27.0",
+    voci: [
+      "Tema chiaro/scuro e colore d'accento personalizzabile (Settings).",
+      "Filtri salvati nell'albero (smart folders) e cheatsheet delle scorciatoie.",
+    ],
+  },
   {
     versione: "0.26.0",
     voci: [
