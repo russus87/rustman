@@ -206,6 +206,7 @@ pub fn analizza(comando: &str) -> Option<Richiesta> {
         tests: Vec::new(),
         pre_script: String::new(),
         post_script: String::new(),
+        impostazioni: Default::default(),
     })
 }
 
@@ -319,6 +320,7 @@ mod tests {
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
+            impostazioni: Default::default(),
         };
         r.metodo = "POST".into();
         let cmd = genera(&r);

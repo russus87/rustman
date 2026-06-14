@@ -321,6 +321,7 @@ fn converti_richiesta(item: PmItem, pre_script: String, post_script: String) -> 
         tests: Vec::new(),
         pre_script,
         post_script,
+        impostazioni: Default::default(),
     }
 }
 

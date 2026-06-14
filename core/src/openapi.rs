@@ -454,6 +454,7 @@ fn costruisci_richiesta(
         tests,
         pre_script: String::new(),
         post_script: String::new(),
+        impostazioni: Default::default(),
     }
 }
 

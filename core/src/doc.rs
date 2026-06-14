@@ -175,6 +175,7 @@ mod tests {
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
+            impostazioni: Default::default(),
         };
         let albero = vec![Collezione {
             nome: "Auth API".into(),

@@ -80,6 +80,38 @@ pub struct Richiesta {
     /// Script JavaScript eseguito DOPO la risposta (test/variabili).
     #[serde(default)]
     pub post_script: String,
+    /// Impostazioni di rete della richiesta (timeout, redirect, TLS, retry 429).
+    #[serde(default)]
+    pub impostazioni: Impostazioni,
+}
+
+/// Impostazioni di rete per-richiesta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Impostazioni {
+    /// Timeout in millisecondi (0 = nessun timeout esplicito).
+    #[serde(default)]
+    pub timeout_ms: u64,
+    /// Se seguire i redirect HTTP (default true).
+    #[serde(default = "vero")]
+    pub segui_redirect: bool,
+    /// Se verificare il certificato TLS (default true).
+    #[serde(default = "vero")]
+    pub verifica_tls: bool,
+    /// Numero di ritentativi automatici su risposta 429 (Too Many Requests),
+    /// rispettando l'header `Retry-After`. 0 = disattivato.
+    #[serde(default)]
+    pub retry_429: u32,
+}
+
+impl Default for Impostazioni {
+    fn default() -> Self {
+        Impostazioni {
+            timeout_ms: 0,
+            segui_redirect: true,
+            verifica_tls: true,
+            retry_429: 0,
+        }
+    }
 }
 
 /// Autenticazione della richiesta.

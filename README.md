@@ -28,6 +28,8 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **API test coverage** dallo spec OpenAPI; **variabili faker** (`{{$name}}`, `{{$email}}`, …).
 - **Test di carico** a N richieste o a **durata/RPS** con warmup; report e grafici.
 - **WebSocket / SSE**: console interattiva (invio/ricezione) e stream di eventi live.
+- **Impostazioni per-richiesta** (timeout, redirect, verifica TLS, retry su 429),
+  **cookie jar** di sessione e **rate-limit aware** (`Retry-After`).
 - **Run**: catene di chiamate per gli integration test.
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,

@@ -1,7 +1,33 @@
 //! Client HTTP: invia una `Richiesta` e misura il tempo di risposta.
 
 use crate::model::{Header, Richiesta, Risposta};
-use std::time::Instant;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+
+/// Cookie jar condiviso per la durata del processo: i `Set-Cookie` ricevuti
+/// vengono rimandati automaticamente alle richieste successive (sessioni).
+fn cookie_jar() -> Arc<reqwest::cookie::Jar> {
+    static JAR: OnceLock<Arc<reqwest::cookie::Jar>> = OnceLock::new();
+    JAR.get_or_init(|| Arc::new(reqwest::cookie::Jar::default()))
+        .clone()
+}
+
+/// Costruisce il client applicando le impostazioni della richiesta
+/// (timeout, redirect, verifica TLS) e il cookie jar condiviso.
+fn costruisci_client(richiesta: &Richiesta) -> Result<reqwest::Client, ErroreHttp> {
+    let imp = &richiesta.impostazioni;
+    let mut b = reqwest::Client::builder().cookie_provider(cookie_jar());
+    if imp.timeout_ms > 0 {
+        b = b.timeout(Duration::from_millis(imp.timeout_ms));
+    }
+    if !imp.segui_redirect {
+        b = b.redirect(reqwest::redirect::Policy::none());
+    }
+    if !imp.verifica_tls {
+        b = b.danger_accept_invalid_certs(true);
+    }
+    b.build().map_err(ErroreHttp::Rete)
+}
 
 /// Errori possibili durante l'invio di una richiesta.
 #[derive(Debug, thiserror::Error)]
@@ -22,52 +48,25 @@ pub async fn invia(richiesta: &Richiesta) -> Result<Risposta, ErroreHttp> {
     let metodo = reqwest::Method::from_bytes(richiesta.metodo.as_bytes())
         .map_err(|_| ErroreHttp::MetodoNonValido(richiesta.metodo.clone()))?;
 
-    let client = reqwest::Client::new();
-    let mut req = client.request(metodo, &richiesta.url);
-
-    // Parametri della query string attivi (?chiave=valore).
-    let query: Vec<(&str, &str)> = richiesta
-        .params
-        .iter()
-        .filter(|p| p.attivo && !p.chiave.is_empty())
-        .map(|p| (p.chiave.as_str(), p.valore.as_str()))
-        .collect();
-    if !query.is_empty() {
-        req = req.query(&query);
-    }
-
-    // Aggiunge solo le intestazioni attive e con chiave non vuota.
-    for h in &richiesta.headers {
-        if h.attivo && !h.chiave.is_empty() {
-            req = req.header(&h.chiave, &h.valore);
-        }
-    }
-
-    // Autenticazione.
-    match richiesta.auth.tipo.as_str() {
-        "bearer" if !richiesta.auth.token.is_empty() => {
-            req = req.bearer_auth(&richiesta.auth.token);
-        }
-        "basic" => {
-            let pwd = if richiesta.auth.password.is_empty() {
-                None
-            } else {
-                Some(&richiesta.auth.password)
-            };
-            req = req.basic_auth(&richiesta.auth.utente, pwd);
-        }
-        "oauth2" if !richiesta.auth.oauth2.access_token.is_empty() => {
-            req = req.bearer_auth(&richiesta.auth.oauth2.access_token);
-        }
-        _ => {}
-    }
-
-    // Corpo della richiesta: dipende dalla modalità scelta.
-    req = applica_corpo(req, richiesta)?;
+    let client = costruisci_client(richiesta)?;
 
     // Misura il tempo totale: dall'invio alla ricezione del corpo.
     let inizio = Instant::now();
-    let resp = req.send().await?;
+
+    // Loop di invio: in caso di 429 (Too Many Requests) rispetta `Retry-After`
+    // e riprova fino a `retry_429` volte.
+    let mut tentativo = 0u32;
+    let resp = loop {
+        let req = costruisci_req(&client, metodo.clone(), richiesta)?;
+        let resp = req.send().await?;
+        if resp.status().as_u16() == 429 && tentativo < richiesta.impostazioni.retry_429 {
+            tentativo += 1;
+            let attesa = retry_after(&resp).unwrap_or(1);
+            tokio::time::sleep(Duration::from_secs(attesa)).await;
+            continue;
+        }
+        break resp;
+    };
     let status = resp.status();
 
     // Copia le intestazioni della risposta nel nostro modello.
@@ -92,6 +91,63 @@ pub async fn invia(richiesta: &Richiesta) -> Result<Risposta, ErroreHttp> {
         body,
         tempo_ms,
     })
+}
+
+/// Costruisce la `RequestBuilder` con query, header, auth e corpo. Estratta per
+/// poter ricostruire la richiesta a ogni tentativo (retry 429).
+fn costruisci_req(
+    client: &reqwest::Client,
+    metodo: reqwest::Method,
+    richiesta: &Richiesta,
+) -> Result<reqwest::RequestBuilder, ErroreHttp> {
+    let mut req = client.request(metodo, &richiesta.url);
+
+    let query: Vec<(&str, &str)> = richiesta
+        .params
+        .iter()
+        .filter(|p| p.attivo && !p.chiave.is_empty())
+        .map(|p| (p.chiave.as_str(), p.valore.as_str()))
+        .collect();
+    if !query.is_empty() {
+        req = req.query(&query);
+    }
+
+    for h in &richiesta.headers {
+        if h.attivo && !h.chiave.is_empty() {
+            req = req.header(&h.chiave, &h.valore);
+        }
+    }
+
+    match richiesta.auth.tipo.as_str() {
+        "bearer" if !richiesta.auth.token.is_empty() => {
+            req = req.bearer_auth(&richiesta.auth.token);
+        }
+        "basic" => {
+            let pwd = if richiesta.auth.password.is_empty() {
+                None
+            } else {
+                Some(&richiesta.auth.password)
+            };
+            req = req.basic_auth(&richiesta.auth.utente, pwd);
+        }
+        "oauth2" if !richiesta.auth.oauth2.access_token.is_empty() => {
+            req = req.bearer_auth(&richiesta.auth.oauth2.access_token);
+        }
+        _ => {}
+    }
+
+    applica_corpo(req, richiesta)
+}
+
+/// Estrae i secondi di attesa dall'header `Retry-After` (formato in secondi).
+fn retry_after(resp: &reqwest::Response) -> Option<u64> {
+    resp.headers()
+        .get("retry-after")?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()
 }
 
 /// Applica il corpo alla richiesta secondo `body_mode`:

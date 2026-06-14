@@ -19,7 +19,7 @@
   let lingCodice = $state("curl");
 
   let tab = $state("Body");
-  const tabs = ["Params", "Headers", "Body", "Auth", "Tests", "Pre-script", "Post-script"];
+  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script"];
   const metodi = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   // Anteprima dei {{segnaposto}} nell'URL: variabili d'ambiente risolte,
@@ -91,6 +91,9 @@
         client_id: "", client_secret: "", username: "", password: "",
         scope: "", access_token: "",
       };
+    }
+    if (richiesta && richiesta.impostazioni == null) {
+      richiesta.impostazioni = { timeout_ms: 0, segui_redirect: true, verifica_tls: true, retry_429: 0 };
     }
   });
 
@@ -314,6 +317,16 @@
         <div class="auth-row">
           <button class="btn btn-save" onclick={ottieniToken} disabled={tokenInCorso}>{tokenInCorso ? "Richiesta..." : "Ottieni token"}</button>
         </div>
+      {/if}
+    </div>
+  {:else if tab === "Rete"}
+    <div class="code-wrap" style="padding:14px 16px">
+      {#if richiesta.impostazioni}
+        <div class="auth-row"><label>Timeout (ms)</label><input class="inline-input" type="number" min="0" placeholder="0 = nessuno" bind:value={richiesta.impostazioni.timeout_ms} /></div>
+        <div class="auth-row"><label>Retry su 429</label><input class="inline-input" type="number" min="0" max="10" title="Ritentativi su 429 rispettando Retry-After" bind:value={richiesta.impostazioni.retry_429} /></div>
+        <div class="auth-row"><label><input type="checkbox" bind:checked={richiesta.impostazioni.segui_redirect} /> Segui i redirect</label></div>
+        <div class="auth-row"><label><input type="checkbox" bind:checked={richiesta.impostazioni.verifica_tls} /> Verifica il certificato TLS</label></div>
+        <div class="script-aiuto" style="border:none;padding:8px 0 0">I cookie (Set-Cookie) sono gestiti automaticamente come sessione tra le richieste.</div>
       {/if}
     </div>
   {:else if tab === "Tests"}

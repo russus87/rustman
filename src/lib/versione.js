@@ -1,9 +1,16 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.19.0";
+export const VERSIONE = "0.20.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.20.0",
+    voci: [
+      "Impostazioni per-richiesta: timeout, follow-redirect, verifica TLS, retry su 429.",
+      "Rate-limit aware: rispetta Retry-After sui 429; cookie jar di sessione automatico.",
+    ],
+  },
   {
     versione: "0.19.0",
     voci: [

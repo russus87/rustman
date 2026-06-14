@@ -44,6 +44,7 @@ mod tests {
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
+            impostazioni: Default::default(),
         };
         let resp = http::invia(&r).await.expect("la richiesta deve riuscire");
         assert_eq!(resp.status, 200);
@@ -71,6 +72,7 @@ mod tests {
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
+            impostazioni: Default::default(),
         };
         let json = serde_json::to_string(&r).unwrap();
         let r2: Richiesta = serde_json::from_str(&json).unwrap();

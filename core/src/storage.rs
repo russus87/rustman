@@ -184,6 +184,7 @@ pub fn crea_richiesta(root: &Path, dir: &str, nome: &str) -> io::Result<String> 
         tests: Vec::new(),
         pre_script: String::new(),
         post_script: String::new(),
+        impostazioni: Default::default(),
     };
     salva_richiesta(root, dir, None, &richiesta)
 }
@@ -781,6 +782,7 @@ mod tests {
             tests: vec![],
             pre_script: String::new(),
             post_script: String::new(),
+            impostazioni: Default::default(),
         }
     }
 
