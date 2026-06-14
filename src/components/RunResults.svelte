@@ -15,9 +15,9 @@
 
   <div class="rr-body">
     {#each risultati as r, i}
-      <div class="passo" class:ko={!r.ok}>
+      <div class="passo" class:ko={!r.ok} class:salt={r.saltato}>
         <div class="riga1">
-          <span class="badge {r.ok ? 'ok' : 'ko'}">{r.ok ? "OK" : "FAIL"}</span>
+          <span class="badge {r.saltato ? 'salt' : r.ok ? 'ok' : 'ko'}">{r.saltato ? "SKIP" : r.ok ? "OK" : "FAIL"}</span>
           <span class="num">#{i + 1}</span>
           <span class="nome">{r.nome}</span>
           <span class="sp"></span>
@@ -25,6 +25,11 @@
           {#if r.tempo != null}<span class="meta">{r.tempo} ms</span>{/if}
         </div>
         {#if r.errore}<div class="errore">{r.errore}</div>{/if}
+        {#if r.catture && Object.keys(r.catture).length}
+          <div class="catture">
+            {#each Object.entries(r.catture) as [k, v]}<span class="cap">⇲ {k} = {v}</span>{/each}
+          </div>
+        {/if}
         {#each r.tests as t}
           <div class="test">
             <span class="te {t.passato ? 'ok' : 'ko'}">{t.passato ? "PASS" : "FAIL"}</span>
@@ -57,6 +62,10 @@
   .badge { font-family: var(--mono); font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 5px; }
   .badge.ok { color: #56d364; background: rgba(63,185,80,.15); }
   .badge.ko { color: #f8918c; background: rgba(248,81,73,.15); }
+  .badge.salt { color: var(--txt-faint); background: var(--panel-3); }
+  .passo.salt { opacity: .7; }
+  .catture { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .cap { font-family: var(--mono); font-size: 11px; color: var(--green); background: rgba(63,185,80,.12); padding: 1px 7px; border-radius: 5px; }
   .num { color: var(--txt-faint); font-family: var(--mono); font-size: 11px; }
   .nome { font-weight: 600; }
   .sp { flex: 1; }

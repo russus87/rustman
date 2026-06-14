@@ -247,6 +247,40 @@ pub type Albero = Vec<Collezione>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Passo {
     pub file: String,
+    /// Se presente, il passo viene eseguito solo se la condizione è vera
+    /// (valutata sulla risposta del passo precedente o sulle variabili).
+    #[serde(default)]
+    pub condizione: Option<Condizione>,
+    /// Valori da estrarre dalla risposta e salvare in variabili per i passi dopo.
+    #[serde(default)]
+    pub catture: Vec<Cattura>,
+    /// Cosa fare se il passo fallisce: "stop" (default) o "continua".
+    #[serde(default)]
+    pub al_fallimento: String,
+}
+
+/// Condizione di un passo del flusso.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Condizione {
+    /// "status" | "json" | "var".
+    pub tipo: String,
+    /// Per "json" è il path (es. data.ok); per "var" il nome variabile.
+    #[serde(default)]
+    pub campo: String,
+    /// "==" | "!=" | "<" | ">" | "contiene".
+    pub operatore: String,
+    pub atteso: String,
+}
+
+/// Cattura di un valore dalla risposta verso una variabile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cattura {
+    pub variabile: String,
+    /// "json" | "header" | "body".
+    pub da: String,
+    /// Path JSON o nome header (vuoto per "body").
+    #[serde(default)]
+    pub campo: String,
 }
 
 /// Una catena di chiamate da eseguire in sequenza (integration test).

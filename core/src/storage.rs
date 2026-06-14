@@ -1120,7 +1120,7 @@ mod tests {
 
         let c = Catena {
             nome: "Flusso Login".into(),
-            passi: vec![Passo { file: "test/login.json".into() }],
+            passi: vec![Passo { file: "test/login.json".into(), condizione: None, catture: vec![], al_fallimento: String::new() }],
         };
         let rel = salva_catena(root, None, &c).unwrap();
         assert_eq!(rel, "runs/flusso-login.json");

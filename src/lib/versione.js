@@ -1,9 +1,16 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.31.0";
+export const VERSIONE = "0.32.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.32.0",
+    voci: [
+      "Visual flow builder: i passi del Run ora hanno condizioni (esegui solo se…), catture di variabili dalla risposta e 'continua al fallimento'.",
+      "Risultati Run con passi saltati e variabili catturate.",
+    ],
+  },
   {
     versione: "0.31.0",
     voci: [
