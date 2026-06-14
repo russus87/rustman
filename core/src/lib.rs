@@ -13,6 +13,7 @@ pub mod openapi;
 pub mod perf;
 pub mod postman;
 pub mod report;
+pub mod security;
 pub mod snapshot;
 pub mod storage;
 pub mod test;

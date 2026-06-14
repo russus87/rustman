@@ -8,9 +8,9 @@ use rustman_core::{
         Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CoverageReport,
         DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf, Richiesta,
         RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta, RunSummary,
-        StatoRepo, VoceStoria,
+        SecurityAvviso, StatoRepo, VoceStoria,
     },
-    oauth, openapi, perf, report, storage, test, textdiff, vars,
+    oauth, openapi, perf, report, security, storage, test, textdiff, vars,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -210,6 +210,12 @@ fn salva_config_cartella(
 #[tauri::command]
 fn valuta_test(asserzioni: Vec<Asserzione>, risposta: Risposta) -> Vec<RisultatoTest> {
     test::valuta(&asserzioni, &risposta)
+}
+
+/// Security scan passivo della risposta (header/cookie).
+#[tauri::command]
+fn security_scan(risposta: Risposta) -> Vec<SecurityAvviso> {
+    security::analizza(&risposta)
 }
 
 /// Esegue un test di carico: `n` richieste con `concorrenza` richieste in volo.
@@ -657,6 +663,7 @@ pub fn run() {
             registra_run,
             pulisci_runs,
             valuta_test,
+            security_scan,
             esegui_perf,
             esegui_perf_cfg,
             lista_workspaces,

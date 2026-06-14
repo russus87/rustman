@@ -24,6 +24,7 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Drift detection** fra due spec OpenAPI (endpoint aggiunti/rimossi/modificati).
 - **Find & Replace** su tutte le richieste; **ereditarietà** di header/auth per cartella.
 - **Import HAR** (export di rete del browser).
+- **Security scan** delle risposte (header di sicurezza, CORS, info leak, cookie).
 - **Snapshot / golden testing** con ignore-paths e approvazione della baseline.
 - **API test coverage** dallo spec OpenAPI; **variabili faker** (`{{$name}}`, `{{$email}}`, …).
 - **Test di carico** a N richieste o a **durata/RPS** con warmup; report e grafici.

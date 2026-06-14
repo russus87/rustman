@@ -1,6 +1,6 @@
 <script>
   // Pannello della risposta: mostra status, metriche, corpo, intestazioni ed esiti dei test.
-  let { risposta, inCorso, errore, risultatiTest = [], onCapturaVar, onCreaTest } = $props();
+  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest } = $props();
 
   let tab = $state("Body"); // Body | Headers | Tests
   let cattura = $state(false); // mostra l'elenco dei campi JSON catturabili
@@ -67,6 +67,11 @@
           Tests <span class="cnt">({passati}/{risultatiTest.length})</span>
         </div>
       {/if}
+      {#if avvisiSicurezza.length > 0}
+        <div class="rsp-tab" class:active={tab === "Sicurezza"} onclick={() => (tab = "Sicurezza")}>
+          Sicurezza <span class="cnt">({avvisiSicurezza.length})</span>
+        </div>
+      {/if}
     </div>
 
     {#if tab === "Body"}
@@ -111,6 +116,16 @@
           </tbody>
         </table>
       </div>
+    {:else if tab === "Sicurezza"}
+      <div class="resp-code" style="padding:8px 0">
+        {#each avvisiSicurezza as a}
+          <div class="test-row">
+            <span class="sec-liv {a.livello}">{a.livello}</span>
+            <span class="test-desc">{a.titolo}</span>
+            <span class="test-det">{a.dettaglio}</span>
+          </div>
+        {/each}
+      </div>
     {:else}
       <div class="resp-code" style="padding:8px 0">
         {#each risultatiTest as t}
@@ -150,6 +165,10 @@
     color: #f8918c;
     background: rgba(248, 81, 73, 0.15);
   }
+  .sec-liv { font-family: var(--mono); font-weight: 700; font-size: 10.5px; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; }
+  .sec-liv.alto { color: #f8918c; background: rgba(248,81,73,.15); }
+  .sec-liv.medio { color: #e2b340; background: rgba(226,179,64,.15); }
+  .sec-liv.info { color: #9aa7b8; background: var(--panel-3); }
   .test-desc {
     font-family: var(--mono);
     color: var(--txt);

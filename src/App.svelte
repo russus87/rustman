@@ -349,6 +349,8 @@
       }
       const post = eseguiPost(req.post_script, { res: rispostaToRes(t.risposta), vars });
       t.risultatiTest = [...tests, ...post.tests];
+      // Security scan passivo della risposta.
+      try { t.avvisiSicurezza = await api.securityScan(t.risposta); } catch { t.avvisiSicurezza = []; }
       // Log: esito + eventuali messaggi degli script.
       const r = t.risposta;
       logga(r.status < 400 ? "ok" : "errore", `${req.metodo} ${req.url} → ${r.status} (${r.tempo_ms} ms)`);
@@ -709,6 +711,7 @@
                 inCorso={tabAttivo.inCorso}
                 errore={tabAttivo.errore}
                 risultatiTest={tabAttivo.risultatiTest}
+                avvisiSicurezza={tabAttivo.avvisiSicurezza ?? []}
                 onCapturaVar={capturaVar}
                 onCreaTest={creaTest}
               />

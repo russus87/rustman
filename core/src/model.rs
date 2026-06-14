@@ -357,6 +357,15 @@ pub struct RisultatoRun {
     pub tests: Vec<RisultatoTest>,
 }
 
+/// Un avviso del security scan sulla risposta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityAvviso {
+    /// "alto" | "medio" | "info".
+    pub livello: String,
+    pub titolo: String,
+    pub dettaglio: String,
+}
+
 /// Una rotta del mock server: metodo + path (templato) e la risposta canned.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MockRoute {

@@ -62,6 +62,9 @@ export const pulisciStoria = () => call("pulisci_storia");
 export const valutaTest = (asserzioni, risposta) =>
   call("valuta_test", { asserzioni, risposta });
 
+// ---- Security scan ----
+export const securityScan = (risposta) => call("security_scan", { risposta });
+
 // ---- Performance ----
 export const eseguiPerf = (richiesta, n, concorrenza, variabili) =>
   call("esegui_perf", { richiesta, n, concorrenza, variabili: variabili ?? null });

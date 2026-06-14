@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.22.0";
+export const VERSIONE = "0.23.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.23.0",
+    voci: [
+      "Security scan delle risposte: header di sicurezza mancanti, CORS aperto, info leak, cookie non sicuri (tab Sicurezza).",
+    ],
+  },
   {
     versione: "0.22.0",
     voci: [

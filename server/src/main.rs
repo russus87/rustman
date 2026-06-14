@@ -250,6 +250,10 @@ async fn h_valuta(Json(r): Json<ValutaReq>) -> Json<Vec<rustman_core::model::Ris
     Json(test::valuta(&r.asserzioni, &r.risposta))
 }
 
+async fn h_security(Json(risposta): Json<Risposta>) -> Json<Vec<rustman_core::model::SecurityAvviso>> {
+    Json(rustman_core::security::analizza(&risposta))
+}
+
 async fn h_perf(
     State(_s): State<Stato>,
     Json(r): Json<PerfReq>,
@@ -666,6 +670,7 @@ async fn main() {
         .route("/api/genera_codice", post(h_genera_codice))
         .route("/api/importa_curl", post(h_importa_curl))
         .route("/api/valuta_test", post(h_valuta))
+        .route("/api/security_scan", post(h_security))
         .route("/api/esegui_perf", post(h_perf))
         .route("/api/lista_workspaces", post(h_lista_workspaces))
         .route("/api/aggiungi_workspace", post(h_aggiungi_workspace))
