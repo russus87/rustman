@@ -81,9 +81,11 @@ cargo run -p rustman-cli -- perf <workspace> --request demo/get.json \
   --duration 30 --concurrency 20 --rps 50 --max-p95 200 --max-error 1
 # copertura delle API rispetto a uno spec OpenAPI
 cargo run -p rustman-cli -- coverage <workspace> --spec openapi.yaml
-# mock server: serve le risposte d'esempio dello spec (dev senza backend)
+# mock server: dallo spec OpenAPI o dalle snapshot registrate del workspace
 cargo run -p rustman-cli -- mock --spec openapi.yaml --port 8080
+cargo run -p rustman-cli -- mock <workspace> --port 8080
 ```
+`run` accetta anche `--envs staging,prod` per eseguire la suite su più ambienti.
 Il comando `run` accetta anche `--min-pass-rate <pct>` (gate CI: fallisce sotto la
 soglia) e `--flaky <n>` (riesegue i test e segnala quelli instabili).
 

@@ -43,6 +43,8 @@ struct Opzioni {
     flaky: u32,
     /// Esegui solo le richieste con questo tag (suite).
     tag: Option<String>,
+    /// Matrice di ambienti: esegui la suite su ciascuno (separati da virgola).
+    envs: Vec<String>,
 }
 
 /// Esito dell'esecuzione di una singola richiesta.
@@ -105,7 +107,7 @@ fn stampa_uso() {
         "Uso:\n\
 \x20 rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n\
 \x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] \\\n\
-\x20             [--update-snapshots] [--min-pass-rate <pct>] [--flaky <n>] [--tag <tag>]\n\
+\x20             [--update-snapshots] [--min-pass-rate <pct>] [--flaky <n>] [--tag <tag>] [--envs a,b,c]\n\
 \x20 rustman perf <workspace> --request <file> [--env <nome>] [--n <N> | --duration <s>] \\\n\
 \x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--profile costante|spike|soak] \\\n\
 \x20             [--spike-rps <r>] [--max-p95 <ms>] [--max-error <pct>]\n\
@@ -223,6 +225,7 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
         min_pass_rate: None,
         flaky: 0,
         tag: None,
+        envs: Vec::new(),
     };
     let mut i = 2;
     while i < args.len() {
@@ -249,6 +252,7 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
             "--min-pass-rate" => opz.min_pass_rate = Some(val()?.parse().map_err(|_| "--min-pass-rate richiede un numero")?),
             "--flaky" => opz.flaky = val()?.parse().map_err(|_| "--flaky richiede un numero")?,
             "--tag" => opz.tag = Some(val()?),
+            "--envs" => opz.envs = val()?.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
@@ -333,9 +337,6 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         return Err(format!("Workspace non trovato: {}", root.display()));
     }
 
-    // Variabili di base dall'ambiente scelto (vuote se non specificato/trovato).
-    let base = carica_variabili(root, opz.env.as_deref())?;
-
     // Mappa file → richiesta da tutto l'albero del workspace.
     let albero = storage::carica_albero(root).map_err(|e| e.to_string())?;
     let mut per_file: HashMap<String, Richiesta> = HashMap::new();
@@ -357,24 +358,39 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
     };
     let multi = opz.dati.is_some();
 
+    // Matrice di ambienti: se `--envs` è indicato, ripete su ciascuno; altrimenti
+    // usa il singolo `--env` (o nessuno).
+    let ambienti: Vec<Option<String>> = if !opz.envs.is_empty() {
+        opz.envs.iter().cloned().map(Some).collect()
+    } else {
+        vec![opz.env.clone()]
+    };
+    let matrice = ambienti.len() > 1;
+
     let mut esiti: Vec<Esito> = Vec::new();
-    for (idx, riga) in righe.iter().enumerate() {
-        if multi {
-            println!("\n— Iterazione {}/{} —", idx + 1, righe.len());
+    for amb in &ambienti {
+        if matrice {
+            println!("\n=== Ambiente: {} ===", amb.as_deref().unwrap_or("(nessuno)"));
         }
-        // Variabili dell'iterazione: base + riga; mutabili per il var-chaining.
-        let mut variabili = base.clone();
-        for (k, v) in riga {
-            variabili.insert(k.clone(), v.clone());
-        }
-        for (file, richiesta) in &selezione {
-            // Applica gli header/auth ereditati dalle cartelle antenate.
-            let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
-            let req = storage::eredita(root, dir, richiesta);
-            esiti.push(
-                esegui_richiesta(root, file, &req, &mut variabili, opz.retry, opz.delay, opz.update_snapshots)
-                    .await,
-            );
+        let base = carica_variabili(root, amb.as_deref())?;
+        for (idx, riga) in righe.iter().enumerate() {
+            if multi {
+                println!("\n— Iterazione {}/{} —", idx + 1, righe.len());
+            }
+            // Variabili dell'iterazione: base + riga; mutabili per il var-chaining.
+            let mut variabili = base.clone();
+            for (k, v) in riga {
+                variabili.insert(k.clone(), v.clone());
+            }
+            for (file, richiesta) in &selezione {
+                // Applica gli header/auth ereditati dalle cartelle antenate.
+                let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+                let req = storage::eredita(root, dir, richiesta);
+                esiti.push(
+                    esegui_richiesta(root, file, &req, &mut variabili, opz.retry, opz.delay, opz.update_snapshots)
+                        .await,
+                );
+            }
         }
     }
 
@@ -405,6 +421,8 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
 
     // Flaky detection: riesegue ogni richiesta e segnala gli esiti intermittenti.
     if opz.flaky > 0 {
+        let amb = opz.envs.first().cloned().or_else(|| opz.env.clone());
+        let base = carica_variabili(root, amb.as_deref())?;
         flaky_detection(root, &selezione, &base, opz.flaky).await;
     }
 
