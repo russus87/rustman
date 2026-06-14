@@ -18,6 +18,7 @@
     onEsportaOpenapi,
     onTrovaSostituisci,
     onDrift,
+    onDiffColl,
     onConfigCartella,
     onCoverage,
   } = $props();
@@ -26,6 +27,16 @@
   let fileInput;
   let driftInput;
   let covInput;
+  let collDiffInput;
+
+  async function suCollDiffFiles(e) {
+    const files = [...(e.target.files || [])];
+    if (files.length === 2) {
+      const [a, b] = await Promise.all(files.map((f) => f.text()));
+      await onDiffColl?.(a, b, files[0].name, files[1].name);
+    }
+    e.target.value = "";
+  }
 
   async function suCovFile(e) {
     const f = e.target.files?.[0];
@@ -100,7 +111,11 @@
     </span>
     <input type="file" accept=".json,application/json" style="display:none" bind:this={fileInput} onchange={suFileImport} />
     <input type="file" accept=".json,.yaml,.yml" multiple style="display:none" bind:this={driftInput} onchange={suDriftFiles} />
+    <span class="side-add" title="Diff di due collezioni (.rustman.json): scegli 2 file" onclick={() => collDiffInput.click()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v18M15 3v18M4 8h5M15 8h5M4 16h5M15 16h5"/></svg>
+    </span>
     <input type="file" accept=".json,.yaml,.yml" style="display:none" bind:this={covInput} onchange={suCovFile} />
+    <input type="file" accept=".json" multiple style="display:none" bind:this={collDiffInput} onchange={suCollDiffFiles} />
   </div>
 </div>
 

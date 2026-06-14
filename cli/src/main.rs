@@ -37,6 +37,10 @@ struct Opzioni {
     report_html: Option<String>,
     /// Se true, aggiorna le baseline degli snapshot invece di confrontarle.
     update_snapshots: bool,
+    /// Soglia minima di pass-rate (%) per uscire con successo (gate CI).
+    min_pass_rate: Option<f64>,
+    /// Numero di esecuzioni per la flaky detection (0 = disattivata).
+    flaky: u32,
 }
 
 /// Esito dell'esecuzione di una singola richiesta.
@@ -98,7 +102,8 @@ fn stampa_uso() {
     eprintln!(
         "Uso:\n\
 \x20 rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n\
-\x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] [--update-snapshots]\n\
+\x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] \\\n\
+\x20             [--update-snapshots] [--min-pass-rate <pct>] [--flaky <n>]\n\
 \x20 rustman perf <workspace> --request <file> [--env <nome>] [--n <N> | --duration <s>] \\\n\
 \x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--max-p95 <ms>] [--max-error <pct>]\n\
 \x20 rustman coverage <workspace> --spec <openapi.yaml|json>\n\
@@ -205,6 +210,8 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
         delay: 2,
         report_html: None,
         update_snapshots: false,
+        min_pass_rate: None,
+        flaky: 0,
     };
     let mut i = 2;
     while i < args.len() {
@@ -228,6 +235,8 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
                 i += 1; // flag senza valore
                 continue;
             }
+            "--min-pass-rate" => opz.min_pass_rate = Some(val()?.parse().map_err(|_| "--min-pass-rate richiede un numero")?),
+            "--flaky" => opz.flaky = val()?.parse().map_err(|_| "--flaky richiede un numero")?,
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
@@ -355,7 +364,7 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         }
     }
 
-    let tutto_ok = riepilogo(&esiti);
+    let mut tutto_ok = riepilogo(&esiti);
     if let Some(path) = &opz.junit {
         std::fs::write(path, junit(&esiti)).map_err(|e| e.to_string())?;
         eprintln!("Report JUnit scritto in {path}");
@@ -366,7 +375,67 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         std::fs::write(path, html).map_err(|e| e.to_string())?;
         eprintln!("Report HTML scritto in {path}");
     }
+
+    // Gate del pass-rate: fallisce se sotto la soglia.
+    if let Some(soglia) = opz.min_pass_rate {
+        let totali: usize = esiti.iter().map(|e| e.risultati.len()).sum();
+        let ok: usize = esiti.iter().flat_map(|e| &e.risultati).filter(|r| r.passato).count();
+        let pr = if totali > 0 { ok as f64 / totali as f64 * 100.0 } else { 100.0 };
+        if pr < soglia {
+            println!("✗ pass-rate {pr:.1}% < soglia {soglia}%");
+            tutto_ok = false;
+        } else {
+            println!("✓ pass-rate {pr:.1}% (soglia {soglia}%)");
+        }
+    }
+
+    // Flaky detection: riesegue ogni richiesta e segnala gli esiti intermittenti.
+    if opz.flaky > 0 {
+        flaky_detection(root, &selezione, &base, opz.flaky).await;
+    }
+
     Ok(tutto_ok)
+}
+
+/// Esegue ogni richiesta `volte` volte (senza script) e segnala quelle che
+/// passano in alcune esecuzioni e falliscono in altre (flaky).
+async fn flaky_detection(
+    root: &Path,
+    selezione: &[(String, Richiesta)],
+    base: &HashMap<String, String>,
+    volte: u32,
+) {
+    println!("\n— Flaky detection ({volte} esecuzioni) —");
+    let mut intermittenti = 0;
+    for (file, richiesta) in selezione {
+        let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+        let req = storage::eredita(root, dir, richiesta);
+        if req.tests.is_empty() {
+            continue;
+        }
+        let mut esiti = Vec::new();
+        for _ in 0..volte {
+            esiti.push(prova_una(&req, base).await);
+        }
+        let pass = esiti.iter().filter(|&&b| b).count();
+        if pass != 0 && pass != esiti.len() {
+            intermittenti += 1;
+            let nome = if req.nome.is_empty() { file } else { &req.nome };
+            println!("  ⚠ FLAKY: {nome} ({pass}/{} pass)", esiti.len());
+        }
+    }
+    if intermittenti == 0 {
+        println!("  nessun test instabile rilevato");
+    }
+}
+
+/// Invio "silenzioso" di una richiesta: true se tutte le asserzioni passano.
+async fn prova_una(richiesta: &Richiesta, base: &HashMap<String, String>) -> bool {
+    let r = vars::risolvi(richiesta, base);
+    match http::invia(&r).await {
+        Ok(risposta) => test::valuta(&r.tests, &risposta).iter().all(|x| x.passato),
+        Err(_) => false,
+    }
 }
 
 /// Converte un `Esito` nel modello condiviso per il report HTML.

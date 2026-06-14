@@ -392,6 +392,58 @@ pub fn pulisci_storia(root: &Path) -> io::Result<()> {
     Ok(())
 }
 
+// ===================== Diff fra due collezioni ===============================
+
+/// Confronta due collezioni esportate (formato `EsportaCollezione` JSON) e
+/// segnala le richieste aggiunte, rimosse o modificate. `None` se il JSON non è
+/// valido. Le richieste sono identificate dal percorso "cartella/.../nome".
+pub fn diff_collezioni(a_json: &str, b_json: &str) -> Option<crate::model::DriftReport> {
+    let a: EsportaCollezione = serde_json::from_str(a_json).ok()?;
+    let b: EsportaCollezione = serde_json::from_str(b_json).ok()?;
+    let ma = appiattisci_export(&a);
+    let mb = appiattisci_export(&b);
+
+    let mut report = crate::model::DriftReport::default();
+    for (k, sig_b) in &mb {
+        match ma.get(k) {
+            None => report.aggiunti.push(k.clone()),
+            Some(sig_a) if sig_a != sig_b => report.modificati.push(k.clone()),
+            _ => {}
+        }
+    }
+    for k in ma.keys() {
+        if !mb.contains_key(k) {
+            report.rimossi.push(k.clone());
+        }
+    }
+    report.aggiunti.sort();
+    report.rimossi.sort();
+    report.modificati.sort();
+    Some(report)
+}
+
+/// Mappa "cartella/.../nome" → firma (metodo + url + body) delle richieste.
+fn appiattisci_export(e: &EsportaCollezione) -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    raccogli_export_flat(&e.figli, "", &mut m);
+    m
+}
+
+fn raccogli_export_flat(figli: &[NodoExport], prefisso: &str, m: &mut HashMap<String, String>) {
+    for n in figli {
+        match n {
+            NodoExport::Cartella { nome, figli } => {
+                raccogli_export_flat(figli, &format!("{prefisso}{nome}/"), m);
+            }
+            NodoExport::Richiesta { richiesta } => {
+                let key = format!("{prefisso}{}", richiesta.nome);
+                let sig = format!("{} {} {}", richiesta.metodo, richiesta.url, richiesta.body);
+                m.insert(key, sig);
+            }
+        }
+    }
+}
+
 // ===================== Find & Replace ========================================
 
 /// Cerca e sostituisce un testo nei campi delle richieste di tutte le collezioni
@@ -878,6 +930,22 @@ mod tests {
         // Eliminando l'ambiente spariscono anche i suoi segreti.
         elimina_environment(root, &rel).unwrap();
         assert!(carica_segreti(root).get(&rel).is_none());
+    }
+
+    #[test]
+    fn diff_di_due_collezioni() {
+        let a = r#"{"rustman":1,"nome":"API","figli":[
+            {"tipo":"richiesta","richiesta":{"nome":"Login","metodo":"POST","url":"https://x/login","body":""}},
+            {"tipo":"richiesta","richiesta":{"nome":"Vecchia","metodo":"GET","url":"https://x/old","body":""}}
+        ]}"#;
+        let b = r#"{"rustman":1,"nome":"API","figli":[
+            {"tipo":"richiesta","richiesta":{"nome":"Login","metodo":"POST","url":"https://x/login/v2","body":""}},
+            {"tipo":"richiesta","richiesta":{"nome":"Nuova","metodo":"GET","url":"https://x/new","body":""}}
+        ]}"#;
+        let d = diff_collezioni(a, b).unwrap();
+        assert_eq!(d.aggiunti, vec!["Nuova"]);
+        assert_eq!(d.rimossi, vec!["Vecchia"]);
+        assert_eq!(d.modificati, vec!["Login"]); // url cambiata
     }
 
     #[test]

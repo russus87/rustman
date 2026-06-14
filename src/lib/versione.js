@@ -1,9 +1,16 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.20.0";
+export const VERSIONE = "0.21.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.21.0",
+    voci: [
+      "CI: gate del pass-rate (--min-pass-rate) e flaky detection (--flaky) nella CLI.",
+      "Diff di due collezioni esportate (aggiunte/rimosse/modificate).",
+    ],
+  },
   {
     versione: "0.20.0",
     voci: [

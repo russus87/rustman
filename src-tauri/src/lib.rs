@@ -180,6 +180,12 @@ fn drift_openapi(vecchio: String, nuovo: String) -> Result<DriftReport, String> 
     openapi::confronta(&vecchio, &nuovo).ok_or_else(|| "spec OpenAPI non valido".to_string())
 }
 
+/// Confronta due collezioni esportate (.rustman.json) e restituisce le differenze.
+#[tauri::command]
+fn diff_collezioni(vecchio: String, nuovo: String) -> Result<DriftReport, String> {
+    storage::diff_collezioni(&vecchio, &nuovo).ok_or_else(|| "collezione non valida".to_string())
+}
+
 /// Carica la configurazione ereditabile di una cartella/collezione.
 #[tauri::command]
 fn carica_config_cartella(app: tauri::AppHandle, dir: String) -> Result<ConfigCartella, String> {
@@ -640,6 +646,7 @@ pub fn run() {
             anteprima,
             trova_sostituisci,
             drift_openapi,
+            diff_collezioni,
             carica_config_cartella,
             salva_config_cartella,
             valuta_snapshot,

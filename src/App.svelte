@@ -247,6 +247,18 @@
     } catch (e) { logga("errore", `Export OpenAPI fallito: ${e}`); }
   }
 
+  // Diff fra due collezioni esportate (.rustman.json): mostra il report nel Log.
+  async function diffCollezioni(a, b, nomeA, nomeB) {
+    try {
+      const d = await api.diffCollezioni(a, b);
+      logga("info", `Diff collezioni (${nomeA} → ${nomeB}): +${d.aggiunti.length} / -${d.rimossi.length} / ~${d.modificati.length}`);
+      for (const x of d.aggiunti) logga("ok", `+ aggiunta: ${x}`);
+      for (const x of d.rimossi) logga("errore", `- rimossa: ${x}`);
+      for (const x of d.modificati) logga("info", `~ modificata: ${x}`);
+      if (!d.aggiunti.length && !d.rimossi.length && !d.modificati.length) logga("ok", "Collezioni identiche.");
+    } catch (e) { logga("errore", `Diff collezioni fallito: ${e}`); }
+  }
+
   // Genera la documentazione HTML e la scarica come file.
   async function esportaDoc() {
     try {
@@ -568,6 +580,7 @@
           onEsportaOpenapi={esportaOpenapi}
           onTrovaSostituisci={trovaSostituisci}
           onDrift={confrontaDrift}
+          onDiffColl={diffCollezioni}
           onConfigCartella={apriConfigCartella}
           onCoverage={coverageDaSpec}
         />

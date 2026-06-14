@@ -81,6 +81,8 @@ cargo run -p rustman-cli -- coverage <workspace> --spec openapi.yaml
 # mock server: serve le risposte d'esempio dello spec (dev senza backend)
 cargo run -p rustman-cli -- mock --spec openapi.yaml --port 8080
 ```
+Il comando `run` accetta anche `--min-pass-rate <pct>` (gate CI: fallisce sotto la
+soglia) e `--flaky <n>` (riesegue i test e segnala quelli instabili).
 
 ## Struttura
 - `core/` — logica riutilizzabile (HTTP, storage, git, test, perf, import, doc, diff, script).

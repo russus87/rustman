@@ -48,6 +48,7 @@ export const anteprima = (testo, variabili) =>
 // ---- Find&Replace / Drift / Config cartella ----
 export const trovaSostituisci = (cerca, con) => call("trova_sostituisci", { cerca, con });
 export const driftOpenapi = (vecchio, nuovo) => call("drift_openapi", { vecchio, nuovo });
+export const diffCollezioni = (vecchio, nuovo) => call("diff_collezioni", { vecchio, nuovo });
 export const caricaConfigCartella = (dir) => call("carica_config_cartella", { dir });
 export const salvaConfigCartella = (dir, config) =>
   call("salva_config_cartella", { dir, config });

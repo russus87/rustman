@@ -343,6 +343,14 @@ async fn h_drift_openapi(
         .ok_or_else(|| Errore("spec OpenAPI non valido".into()))
 }
 
+async fn h_diff_collezioni(
+    Json(r): Json<DriftReq>,
+) -> Result<Json<rustman_core::model::DriftReport>, Errore> {
+    storage::diff_collezioni(&r.vecchio, &r.nuovo)
+        .map(Json)
+        .ok_or_else(|| Errore("collezione non valida".into()))
+}
+
 async fn h_carica_config_cartella(
     State(s): State<Stato>,
     Json(r): Json<DirReq>,
@@ -690,6 +698,7 @@ async fn main() {
         .route("/api/anteprima", post(h_anteprima))
         .route("/api/trova_sostituisci", post(h_trova_sostituisci))
         .route("/api/drift_openapi", post(h_drift_openapi))
+        .route("/api/diff_collezioni", post(h_diff_collezioni))
         .route("/api/carica_config_cartella", post(h_carica_config_cartella))
         .route("/api/salva_config_cartella", post(h_salva_config_cartella))
         .route("/api/esegui_perf_cfg", post(h_perf_cfg))
