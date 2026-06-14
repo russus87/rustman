@@ -9,6 +9,10 @@ const dict = {
     Tema: "Tema", Accento: "Accento", Dimensione: "Dimensione", Lingua: "Lingua",
     Scuro: "Scuro", Chiaro: "Chiaro", Sistema: "Sistema",
     Autosalvataggio: "Autosalvataggio",
+    "Nuovo ambiente": "Nuovo ambiente", Variabili: "Variabili", Nome: "Nome",
+    Salva: "Salva", Attiva: "Attiva", Attivo: "Attivo", Elimina: "Elimina",
+    "Nessun ambiente.": "Nessun ambiente.", Passi: "Passi", Esegui: "Esegui",
+    Strumenti: "Strumenti", Preferiti: "Preferiti",
   },
   en: {
     Collections: "Collections", Run: "Run", History: "History", Git: "Git",
@@ -16,6 +20,10 @@ const dict = {
     Tema: "Theme", Accento: "Accent", Dimensione: "Size", Lingua: "Language",
     Scuro: "Dark", Chiaro: "Light", Sistema: "System",
     Autosalvataggio: "Autosave",
+    "Nuovo ambiente": "New environment", Variabili: "Variables", Nome: "Name",
+    Salva: "Save", Attiva: "Activate", Attivo: "Active", Elimina: "Delete",
+    "Nessun ambiente.": "No environments.", Passi: "Steps", Esegui: "Run",
+    Strumenti: "Tools", Preferiti: "Favorites",
   },
 };
 

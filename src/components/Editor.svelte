@@ -19,7 +19,7 @@
   let lingCodice = $state("curl");
 
   let tab = $state("Body");
-  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Note"];
+  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Note", "Esempi"];
   const metodi = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   // Anteprima dei {{segnaposto}} nell'URL: variabili d'ambiente risolte,
@@ -145,7 +145,11 @@
     }
     if (richiesta && !Array.isArray(richiesta.tags)) richiesta.tags = [];
     if (richiesta && richiesta.descrizione == null) richiesta.descrizione = "";
+    if (richiesta && !Array.isArray(richiesta.esempi)) richiesta.esempi = [];
   });
+  function rimuoviEsempio(i) {
+    richiesta.esempi.splice(i, 1);
+  }
 
   // OAuth2: chiede il token al server di autorizzazione e lo salva nella richiesta.
   let tokenInCorso = $state(false);
@@ -398,6 +402,22 @@
     <div class="code-wrap">
       <textarea class="code-area" bind:value={richiesta.descrizione} spellcheck="false"
         placeholder={"## Cosa fa\nDescrivi questa richiesta…"}></textarea>
+    </div>
+  {:else if tab === "Esempi"}
+    <div class="code-wrap" style="padding:12px 14px;overflow:auto">
+      {#each richiesta.esempi ?? [] as e, i}
+        <div style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <input class="inline-input" style="max-width:200px" bind:value={e.nome} />
+            <span class="test-sel" style="padding:2px 8px">{e.status}</span>
+            <span class="rsp-icon" onclick={() => rimuoviEsempio(i)} title="Rimuovi">✕</span>
+          </div>
+          <textarea class="code-area" style="min-height:90px" readonly>{e.body}</textarea>
+        </div>
+      {/each}
+      {#if (richiesta.esempi ?? []).length === 0}
+        <div class="placeholder" style="height:auto;padding:14px 0"><div>Nessun esempio. Usa "＋ esempio" sulla risposta.</div></div>
+      {/if}
     </div>
   {:else if tab === "Tests"}
     <div class="code-wrap" style="padding:12px 14px">

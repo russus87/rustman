@@ -28,7 +28,8 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
   **batch send** con scheduler e **confronto** affiancato delle risposte.
 - **Preferiti**, **filtri salvati per-workspace**, **variabili di collezione**,
   **response come tabella**, **cookie inspector** e **export/import del workspace**.
-- **Temi** (scuro/chiaro/sistema) con accento e dimensione font; **i18n** IT/EN (base).
+- **Temi** (scuro/chiaro/sistema) con accento e dimensione font; **i18n** IT/EN.
+- **Esempi di risposta salvati** per richiesta, inclusi nella documentazione.
 - **Generatore di documentazione** HTML dalle collezioni.
 - **Cattura dal response**: dai campi JSON crei variabili o asserzioni con un click.
 - **Trend dei tempi** per endpoint nella History (sparkline, avg/p95).

@@ -209,6 +209,7 @@ pub fn analizza(comando: &str) -> Option<Richiesta> {
         impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
     })
 }
 
@@ -325,6 +326,7 @@ mod tests {
             impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
         };
         r.metodo = "POST".into();
         let cmd = genera(&r);

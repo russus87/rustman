@@ -502,6 +502,7 @@ fn costruisci_richiesta(
         impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
     }
 }
 

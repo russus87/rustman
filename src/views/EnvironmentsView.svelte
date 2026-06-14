@@ -1,5 +1,6 @@
 <script>
   // Vista "Environments": gestione ambienti e variabili, con scelta dell'ambiente attivo.
+  import { t } from "../lib/i18n.svelte.js";
   let { environments, ambienteAttivo, onSalva, onElimina, onImpostaAttivo } = $props();
 
   // Copia locale modificabile (rinfrescata a ogni montaggio della vista).
@@ -35,8 +36,8 @@
 </script>
 
 <div class="env-head">
-  ENVIRONMENTS
-  <span class="add" title="Nuovo ambiente" onclick={nuovo}>+</span>
+  {t("Environments").toUpperCase()}
+  <span class="add" title={t("Nuovo ambiente")} onclick={nuovo}>+</span>
 </div>
 
 <div class="env-list">

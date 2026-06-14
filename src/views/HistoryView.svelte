@@ -1,6 +1,7 @@
 <script>
   // Vista "History": cronologia delle richieste inviate, con replay (riapertura
   // della richiesta) e confronto (diff) di due risposte.
+  import { t } from "../lib/i18n.svelte.js";
   let { storia = [], runs = [], onApri, onPulisci, onAggiorna, onConfronta } = $props();
 
   // Serie del pass-rate (%) per il trend dei test, dal più vecchio al più recente.
@@ -70,7 +71,7 @@
 </script>
 
 <div class="sto-head">
-  HISTORY
+  {t("History").toUpperCase()}
   <span class="seg" class:on={modo === "lista"} onclick={() => (modo = "lista")}>Lista</span>
   <span class="seg" class:on={modo === "andamento"} onclick={() => (modo = "andamento")}>Tempi</span>
   <span class="seg" class:on={modo === "test"} onclick={() => (modo = "test")}>Test</span>

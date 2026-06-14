@@ -2,6 +2,7 @@
   // Vista "Run": crea ed esegue catene di chiamate (integration test).
   import { onMount } from "svelte";
   import * as api from "../lib/api.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   let { albero, onEsegui } = $props();
 
@@ -85,7 +86,7 @@
 </script>
 
 <div class="run-head">
-  RUN
+  {t("Run").toUpperCase()}
   <span class="add" title="Nuova catena" onclick={nuova}>+</span>
 </div>
 

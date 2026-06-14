@@ -176,6 +176,7 @@ mod tests {
             impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
         }
     }
 

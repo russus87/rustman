@@ -187,6 +187,7 @@ pub fn crea_richiesta(root: &Path, dir: &str, nome: &str) -> io::Result<String> 
         impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
     };
     salva_richiesta(root, dir, None, &richiesta)
 }
@@ -954,6 +955,7 @@ mod tests {
             impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
         }
     }
 

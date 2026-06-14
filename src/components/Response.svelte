@@ -1,6 +1,6 @@
 <script>
   // Pannello della risposta: mostra status, metriche, corpo, intestazioni ed esiti dei test.
-  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest, onAutoSchema, onSnapshotDiff, onSnapshotAccetta } = $props();
+  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest, onAutoSchema, onSnapshotDiff, onSnapshotAccetta, onSalvaEsempio } = $props();
 
   let tab = $state("Body"); // Body | Headers | Tests
   let cattura = $state(false); // mostra l'elenco dei campi JSON catturabili
@@ -74,6 +74,7 @@
       <span class="resp-meta">{dimensione(risposta.dimensione)}</span>
       <span class="gen-test" title="Genera asserzioni dalla risposta" onclick={() => onAutoTest?.(risposta)}>＋ test</span>
       <span class="gen-test" title="Crea asserzione schema dalla risposta" onclick={() => onAutoSchema?.(risposta)}>＋ schema</span>
+      <span class="gen-test" title="Salva come esempio di risposta" onclick={() => onSalvaEsempio?.(risposta)}>＋ esempio</span>
     {/if}
   </div>
 

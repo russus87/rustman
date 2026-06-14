@@ -175,6 +175,14 @@
     } catch { /* body non JSON */ }
     logga("ok", `${n} asserzioni generate dalla risposta`);
   }
+  // Salva la risposta come esempio per la richiesta attiva.
+  function salvaEsempio(risposta) {
+    const t = tabAttivo;
+    if (!t || t.tipo !== "request") return;
+    if (!t.richiesta.esempi) t.richiesta.esempi = [];
+    t.richiesta.esempi.push({ nome: `Esempio ${t.richiesta.esempi.length + 1}`, status: risposta.status, body: risposta.body });
+    logga("ok", "Risposta salvata come esempio");
+  }
   // Crea un'asserzione "schema" inferendo lo schema dalla risposta.
   async function autoSchema(risposta) {
     const t = tabAttivo;
@@ -902,6 +910,7 @@
                 onAutoSchema={autoSchema}
                 onSnapshotDiff={snapshotDiff}
                 onSnapshotAccetta={snapshotAccetta}
+                onSalvaEsempio={salvaEsempio}
               />
               <Splitter direction="row" onResize={(d) => ridimensiona("perf", -d, 120, 700)} />
               <Performance richiesta={tabAttivo.richiesta} variabili={variabiliAttive} />

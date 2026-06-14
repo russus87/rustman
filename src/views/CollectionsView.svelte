@@ -1,6 +1,7 @@
 <script>
   // Vista "Collections": albero ricorsivo di collezioni, cartelle e richieste.
   import NodoAlbero from "../components/NodoAlbero.svelte";
+  import { t } from "../lib/i18n.svelte.js";
 
   let {
     albero,
@@ -175,7 +176,7 @@
 </script>
 
 <div class="col-head" style="padding-top:14px">
-  <span class="side-title">COLLECTIONS</span>
+  <span class="side-title">{t("Collections").toUpperCase()}</span>
   <div class="col-tools">
     <span class="side-add" title="Nuova collezione" onclick={() => (nuovaColl.attiva = true)}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -266,7 +267,7 @@
     </div>
   {/if}
   {#if preferiti.length && !cerca.trim()}
-    <div style="padding:6px 14px 2px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:var(--txt-faint)">★ PREFERITI</div>
+    <div style="padding:6px 14px 2px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:var(--txt-faint)">★ {t("Preferiti").toUpperCase()}</div>
     {#each preferiti as n}
       <NodoAlbero nodo={n} livello={0} {attivo} {azioni} {pinnati} />
     {/each}

@@ -89,6 +89,17 @@ fn rendi_richiesta(r: &Richiesta, out: &mut String) {
         }
         out.push_str("</ul>");
     }
+    if !r.esempi.is_empty() {
+        out.push_str("<h4>Esempi di risposta</h4>");
+        for e in &r.esempi {
+            out.push_str(&format!(
+                "<div class=\"esempio\"><span class=\"es-nome\">{}</span> <span class=\"es-st\">{}</span><pre>{}</pre></div>",
+                esc(&e.nome),
+                e.status,
+                esc(&e.body)
+            ));
+        }
+    }
     out.push_str("</article>");
 }
 
@@ -158,6 +169,7 @@ pre{background:#0b0e14;border:1px solid #2a3340;border-radius:8px;padding:12px;o
 .tests{list-style:none;font-family:monospace;font-size:.85rem}.tests li{padding:2px 0;color:#9aa7b8}\
 .auth{font-size:.9rem;color:#9aa7b8}.vuoto{color:#6e7b8a}\
 .desc{color:#c9cfda;font-size:.92rem;margin:4px 0 8px;white-space:pre-wrap}\
+.esempio{margin:6px 0}.es-nome{font-weight:600;font-size:.88rem}.es-st{font-family:monospace;color:#9aa7b8;font-size:.82rem}\
 @media(max-width:720px){body{grid-template-columns:1fr}nav{position:static;max-height:none}}";
 
 #[cfg(test)]
@@ -183,6 +195,7 @@ mod tests {
             impostazioni: Default::default(),
         tags: Vec::new(),
         descrizione: String::new(),
+        esempi: Vec::new(),
         };
         let albero = vec![Collezione {
             nome: "Auth API".into(),

@@ -89,6 +89,17 @@ pub struct Richiesta {
     /// Descrizione in Markdown (mostrata nella doc generata).
     #[serde(default)]
     pub descrizione: String,
+    /// Risposte d'esempio salvate (mostrate nella documentazione).
+    #[serde(default)]
+    pub esempi: Vec<EsempioRisposta>,
+}
+
+/// Una risposta d'esempio salvata per una richiesta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EsempioRisposta {
+    pub nome: String,
+    pub status: u16,
+    pub body: String,
 }
 
 /// Impostazioni di rete per-richiesta.

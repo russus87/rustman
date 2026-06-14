@@ -13,7 +13,7 @@
   const accenti = ["#7c5cff", "#3fb950", "#f74c00", "#388bfd", "#39d0d8", "#e3a008", "#f85149"];
 </script>
 
-<div class="set-head">SETTINGS</div>
+<div class="set-head">{t("Settings").toUpperCase()}</div>
 <div class="set-body">
   <div class="campo">
     <span>{t("Lingua")}</span>
@@ -52,7 +52,7 @@
   <label class="opzione">
     <input type="checkbox" bind:checked={settings.autosave} onchange={aggiorna} />
     <span>
-      <b>Autosalvataggio</b>
+      <b>{t("Autosalvataggio")}</b>
       <small>Salva la richiesta da sola dopo una breve pausa, così non perdi le modifiche.</small>
     </span>
   </label>
