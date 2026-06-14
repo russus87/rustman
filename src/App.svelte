@@ -21,6 +21,7 @@
   import CommandPalette from "./components/CommandPalette.svelte";
   import FolderConfig from "./components/FolderConfig.svelte";
   import Socket from "./components/Socket.svelte";
+  import BatchResults from "./components/BatchResults.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -165,6 +166,31 @@
     };
     tabs.push(tab); tabAttivoId = tab.id;
   }
+  // Esegue tutte le richieste sotto una cartella/collezione e mostra una griglia.
+  async function eseguiBatch(dir) {
+    const tutte = [];
+    for (const c of albero) for (const n of appiattisci(c.figli, [])) tutte.push(n);
+    const sel = tutte.filter((n) => n.file.startsWith(dir + "/"));
+    const tab = { id: prossimoId++, tipo: "batch", titolo: `Batch · ${dir}`, righe: [], inCorso: true };
+    tabs.push(tab); tabAttivoId = tab.id;
+    for (const n of sel) {
+      const req = structuredClone($state.snapshot(n.richiesta));
+      const riga = { nome: req.nome || "(senza nome)", metodo: req.metodo, url: req.url, status: 0, tempo: 0, ok: 0, tot: 0, errore: null };
+      try {
+        const dirR = n.file.slice(0, n.file.lastIndexOf("/"));
+        const resp = await api.inviaRichiesta(req, variabiliAttive || {}, dirR);
+        riga.status = resp.status; riga.tempo = resp.tempo_ms;
+        if (req.tests?.length) {
+          const r = await api.valutaTest(req.tests, resp);
+          riga.tot = r.length; riga.ok = r.filter((x) => x.passato).length;
+        }
+      } catch (e) { riga.errore = String(e); }
+      tab.righe.push(riga);
+    }
+    tab.inCorso = false;
+    logga("ok", `Batch "${dir}": ${tab.righe.length} richieste eseguite`);
+  }
+
   // Apre una nuova console WebSocket o SSE in un tab.
   function nuovaConnessione(protocollo) {
     const tab = {
@@ -583,6 +609,7 @@
           onDiffColl={diffCollezioni}
           onConfigCartella={apriConfigCartella}
           onCoverage={coverageDaSpec}
+          onEseguiBatch={eseguiBatch}
         />
       {:else if vista === "run"}
         <RunView {albero} onEsegui={eseguiRun} />
@@ -655,6 +682,8 @@
           />
         {:else if tabAttivo.tipo === "socket"}
           <Socket tab={tabAttivo} />
+        {:else if tabAttivo.tipo === "batch"}
+          <BatchResults titolo={tabAttivo.titolo} righe={tabAttivo.righe} inCorso={tabAttivo.inCorso} />
         {:else}
           <div class="req-area" style="grid-template-columns: 1fr 5px {layout.right}px">
             <div class="editor-col">

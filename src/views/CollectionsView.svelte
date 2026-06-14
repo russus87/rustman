@@ -21,6 +21,7 @@
     onDiffColl,
     onConfigCartella,
     onCoverage,
+    onEseguiBatch,
   } = $props();
 
   let nuovaColl = $state({ attiva: false, nome: "" });
@@ -69,6 +70,7 @@
     onEliminaRichiesta,
     onEsporta,
     onConfigCartella,
+    onEseguiBatch,
   };
 
   function confermaColl() {

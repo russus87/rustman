@@ -33,6 +33,54 @@
   }
   const urlRisolto = $derived(risolviAnteprima(richiesta.url));
 
+  // Autocomplete dei {{...}} nell'URL.
+  let urlEl = $state(null);
+  let acAperto = $state(false);
+  let acIndice = $state(0);
+  const DINAMICHE = ["$timestamp", "$isoTimestamp", "$randomUUID", "$randomInt", "$randomFloat",
+    "$randomBool", "$name", "$email", "$company", "$city", "$lorem", "$phone"];
+
+  function contestoVar(valore, caret) {
+    const prima = valore.slice(0, caret);
+    const apri = prima.lastIndexOf("{{");
+    if (apri < 0 || prima.slice(apri).includes("}}")) return null;
+    const partial = prima.slice(apri + 2);
+    if (/[\s{}]/.test(partial)) return null;
+    return { partial, apri };
+  }
+  const acSuggerimenti = $derived.by(() => {
+    if (!acAperto || !urlEl) return [];
+    const ctx = contestoVar(richiesta.url, urlEl.selectionStart ?? richiesta.url.length);
+    if (!ctx) return [];
+    const tutte = [...Object.keys(variabili || {}), ...DINAMICHE];
+    return tutte.filter((v) => v.toLowerCase().startsWith(ctx.partial.toLowerCase())).slice(0, 8);
+  });
+  function suInputUrl() {
+    const ctx = contestoVar(richiesta.url, urlEl?.selectionStart ?? 0);
+    acAperto = !!ctx;
+    acIndice = 0;
+  }
+  function inserisciVar(nome) {
+    const caret = urlEl.selectionStart;
+    const ctx = contestoVar(richiesta.url, caret);
+    if (!ctx) return;
+    const before = richiesta.url.slice(0, ctx.apri);
+    const after = richiesta.url.slice(caret);
+    richiesta.url = `${before}{{${nome}}}${after}`;
+    acAperto = false;
+    const pos = before.length + nome.length + 4;
+    requestAnimationFrame(() => { urlEl.focus(); urlEl.setSelectionRange(pos, pos); });
+  }
+  function suTastoUrl(e) {
+    if (acAperto && acSuggerimenti.length) {
+      if (e.key === "ArrowDown") { e.preventDefault(); acIndice = Math.min(acIndice + 1, acSuggerimenti.length - 1); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); acIndice = Math.max(acIndice - 1, 0); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); inserisciVar(acSuggerimenti[acIndice]); return; }
+      if (e.key === "Escape") { acAperto = false; return; }
+    }
+    suTasto(e);
+  }
+
   function classeMetodo(m) {
     if (m === "GET") return "get";
     if (m === "POST") return "post";
@@ -164,8 +212,19 @@
         {#each metodi as m}<option value={m}>{m}</option>{/each}
       </select>
     </div>
-    <div class="url-input">
-      <input bind:value={richiesta.url} onkeydown={suTasto} spellcheck="false" placeholder="https://..." />
+    <div class="url-input" style="position:relative">
+      <input bind:this={urlEl} bind:value={richiesta.url} oninput={suInputUrl} onkeydown={suTastoUrl}
+        onblur={() => requestAnimationFrame(() => (acAperto = false))} spellcheck="false" placeholder="https://..." />
+      {#if acAperto && acSuggerimenti.length}
+        <div class="ac-pop">
+          {#each acSuggerimenti as s, i}
+            <div class="ac-item" class:active={i === acIndice} onmousedown={(e) => { e.preventDefault(); inserisciVar(s); }}>
+              <span class="ac-brace">{"{{"}</span>{s}<span class="ac-brace">{"}}"}</span>
+              {#if s.startsWith("$")}<span class="ac-tag">din</span>{/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
     <div class="btn-split">
       <button class="btn btn-send main" onclick={onInvia} disabled={inCorso}>
@@ -509,6 +568,15 @@
   .mini-b:hover {
     background: #22222e;
   }
+  .ac-pop {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 40; margin-top: 2px;
+    background: var(--panel); border: 1px solid var(--border-2); border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.45); overflow: hidden; max-height: 220px; overflow-y: auto;
+  }
+  .ac-item { display: flex; align-items: center; gap: 4px; padding: 7px 10px; cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--txt); }
+  .ac-item.active { background: rgba(124,92,255,.18); }
+  .ac-brace { color: var(--txt-faint); }
+  .ac-tag { margin-left: auto; font-size: 10px; color: var(--accent-2); background: var(--panel-3); padding: 1px 5px; border-radius: 4px; }
   .url-preview {
     padding: 4px 16px 6px;
     font-family: var(--mono);

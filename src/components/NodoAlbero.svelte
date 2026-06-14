@@ -52,6 +52,7 @@
       <span class="fact" title="Nuova richiesta" onclick={(e) => { e.stopPropagation(); avvia("req"); }}>＋</span>
       <span class="fact" title="Nuova cartella" onclick={(e) => { e.stopPropagation(); avvia("folder"); }}>🗀</span>
       <span class="fact" title="Rinomina" onclick={(e) => { e.stopPropagation(); avvia("rinomina"); }}>✎</span>
+      <span class="fact" title="Esegui tutte (batch)" onclick={(e) => { e.stopPropagation(); azioni.onEseguiBatch(nodo.dir); }}>▶</span>
       <span class="fact" title="Header/auth ereditati" onclick={(e) => { e.stopPropagation(); azioni.onConfigCartella(nodo.dir, nodo.nome); }}>⚙</span>
       {#if livello === 0}
         <span class="fact" title="Esporta" onclick={(e) => { e.stopPropagation(); azioni.onEsporta(nodo.dir, nodo.nome); }}>⤓</span>
