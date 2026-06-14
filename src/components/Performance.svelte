@@ -11,6 +11,8 @@
   let durataS = $state(10); // durata del test (modo durata)
   let rps = $state(0); // RPS target (0 = massimo)
   let warmupS = $state(0); // warmup scartato
+  let profilo = $state("costante"); // costante | spike | soak
+  let spikeRps = $state(0); // RPS durante il picco (profilo spike)
   let inCorso = $state(false);
   let errore = $state(null);
   let ris = $state(null); // RisultatoPerf
@@ -26,6 +28,8 @@
         durata_s: modo === "durata" ? Number(durataS) : 0,
         rps: Number(rps),
         warmup_s: Number(warmupS),
+        profilo: modo === "durata" ? profilo : "costante",
+        spike_rps: Number(spikeRps),
       };
       ris = await api.eseguiPerfCfg($state.snapshot(richiesta), opzioni, variabili);
     } catch (e) {
@@ -91,8 +95,18 @@
       {#if modo === "count"}
         <label>Richieste<input type="number" min="1" max="50000" bind:value={n} /></label>
       {:else}
-        <label>Durata (s)<input type="number" min="1" max="3600" bind:value={durataS} /></label>
+        <label>Profilo
+          <select bind:value={profilo}>
+            <option value="costante">Costante</option>
+            <option value="spike">Spike</option>
+            <option value="soak">Soak</option>
+          </select>
+        </label>
+        <label>Durata (s)<input type="number" min="1" max="86400" bind:value={durataS} /></label>
         <label>RPS target<input type="number" min="0" max="100000" bind:value={rps} /></label>
+        {#if profilo === "spike"}
+          <label>RPS picco<input type="number" min="0" max="100000" bind:value={spikeRps} /></label>
+        {/if}
         <label>Warmup (s)<input type="number" min="0" max="600" bind:value={warmupS} /></label>
       {/if}
       <label>Concorrenza<input type="number" min="1" max="256" bind:value={concorrenza} /></label>

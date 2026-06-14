@@ -50,24 +50,29 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
     let sem = Arc::new(Semaphore::new(concorrenza));
     let warmup = Duration::from_secs(opz.warmup_s);
     let fine = Duration::from_secs(opz.warmup_s + opz.durata_s);
-    let intervallo = if opz.rps > 0 {
-        Some(Duration::from_secs_f64(1.0 / opz.rps as f64))
-    } else {
-        None
-    };
+    // Intervalli di base e di picco (profilo "spike").
+    let int_base = (opz.rps > 0).then(|| 1.0 / opz.rps as f64);
+    let int_spike = (opz.spike_rps > 0)
+        .then(|| 1.0 / opz.spike_rps as f64)
+        .or(int_base);
+    let spike = opz.profilo == "spike";
 
     let inizio = Instant::now();
     let mut prossimo = Instant::now();
     let mut handles = Vec::new();
 
     while inizio.elapsed() < fine {
-        // Pacing verso il RPS target.
+        // Pacing verso il RPS target; nel profilo "spike" la fascia centrale
+        // (40%–60% della durata) usa il RPS di picco.
+        let frazione = inizio.elapsed().as_secs_f64() / fine.as_secs_f64().max(0.001);
+        let in_picco = spike && (0.4..0.6).contains(&frazione);
+        let intervallo = if in_picco { int_spike } else { int_base };
         if let Some(iv) = intervallo {
             let ora = Instant::now();
             if ora < prossimo {
                 tokio::time::sleep(prossimo - ora).await;
             }
-            prossimo += iv;
+            prossimo = ora.max(prossimo) + Duration::from_secs_f64(iv);
         }
         let permesso = sem.clone().acquire_owned().await.unwrap();
         let r = richiesta.clone();

@@ -508,15 +508,33 @@ pub struct OpzioniPerf {
     /// Secondi di warmup iniziale, esclusi dalle statistiche.
     #[serde(default)]
     pub warmup_s: u64,
+    /// Profilo di carico: "costante" | "spike" | "soak".
+    #[serde(default = "profilo_costante")]
+    pub profilo: String,
+    /// RPS durante la fase di picco (solo profilo "spike").
+    #[serde(default)]
+    pub spike_rps: u64,
 }
 
 fn uno() -> usize {
     1
 }
 
+fn profilo_costante() -> String {
+    "costante".to_string()
+}
+
 impl Default for OpzioniPerf {
     fn default() -> Self {
-        OpzioniPerf { concorrenza: 1, n: 0, durata_s: 0, rps: 0, warmup_s: 0 }
+        OpzioniPerf {
+            concorrenza: 1,
+            n: 0,
+            durata_s: 0,
+            rps: 0,
+            warmup_s: 0,
+            profilo: profilo_costante(),
+            spike_rps: 0,
+        }
     }
 }
 

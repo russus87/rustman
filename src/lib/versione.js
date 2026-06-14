@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.23.0";
+export const VERSIONE = "0.24.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.24.0",
+    voci: [
+      "Performance: profili di carico spike (picco nella fascia centrale) e soak (lunga durata).",
+    ],
+  },
   {
     versione: "0.23.0",
     voci: [

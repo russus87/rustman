@@ -105,7 +105,8 @@ fn stampa_uso() {
 \x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] \\\n\
 \x20             [--update-snapshots] [--min-pass-rate <pct>] [--flaky <n>]\n\
 \x20 rustman perf <workspace> --request <file> [--env <nome>] [--n <N> | --duration <s>] \\\n\
-\x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--max-p95 <ms>] [--max-error <pct>]\n\
+\x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--profile costante|spike|soak] \\\n\
+\x20             [--spike-rps <r>] [--max-p95 <ms>] [--max-error <pct>]\n\
 \x20 rustman coverage <workspace> --spec <openapi.yaml|json>\n\
 \x20 rustman mock --spec <openapi.yaml|json> [--port <p>]"
     );
@@ -279,6 +280,8 @@ fn analizza_perf(args: &[String]) -> Result<OpzioniPerfCli, String> {
             "--warmup" => o.opz.warmup_s = num()?,
             "--max-p95" => o.max_p95 = Some(num()? as u128),
             "--max-error" => o.max_error_pct = Some(val()?.parse().map_err(|_| "--max-error richiede un numero")?),
+            "--profile" => o.opz.profilo = val()?,
+            "--spike-rps" => o.opz.spike_rps = num()?,
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
