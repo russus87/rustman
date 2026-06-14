@@ -59,3 +59,73 @@ jobs:
           releaseDraft: true
           releaseBody: "Pacchetti generati automaticamente."
           args: ${{ matrix.args }}
+
+  # Pacchetto Arch Linux (.pkg.tar.zst) creato con makepkg in un container Arch.
+  arch:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    container: archlinux:latest
+    steps:
+      - name: Dipendenze di sistema (Arch)
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel git rust nodejs npm \
+            webkit2gtk-4.1 libsoup3 gtk3 librsvg openssl
+
+      - uses: actions/checkout@v4
+
+      - name: Build frontend + binario
+        run: |
+          npm install
+          npm run build
+          cargo build --release -p app
+
+      - name: Crea il pacchetto con makepkg
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir pkgbuild && cd pkgbuild
+          cp ../target/release/app rustman
+          cp ../src-tauri/icons/128x128.png rustman.png
+          cp ../LICENSE LICENSE
+          cat > rustman.desktop <<'DESKTOP'
+          [Desktop Entry]
+          Name=Rustman
+          Comment=Client API desktop in Rust + Tauri + Svelte
+          Exec=rustman
+          Icon=rustman
+          Type=Application
+          Categories=Development;Utility;
+          DESKTOP
+          cat > PKGBUILD <<'PKG'
+          pkgname=rustman
+          pkgver=__VER__
+          pkgrel=1
+          pkgdesc="Client API desktop in Rust + Tauri + Svelte"
+          arch=('x86_64')
+          url="https://github.com/russus87/rustman"
+          license=('MIT')
+          depends=('webkit2gtk-4.1' 'libsoup3' 'gtk3')
+          source=('rustman' 'rustman.png' 'rustman.desktop' 'LICENSE')
+          sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+          package() {
+            install -Dm755 "$srcdir/rustman" "$pkgdir/usr/bin/rustman"
+            install -Dm644 "$srcdir/rustman.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/rustman.png"
+            install -Dm644 "$srcdir/rustman.desktop" "$pkgdir/usr/share/applications/rustman.desktop"
+            install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/rustman/LICENSE"
+          }
+          PKG
+          sed -i "s/__VER__/${VER}/" PKGBUILD
+          # makepkg non gira da root: creiamo un utente dedicato.
+          useradd -m builder
+          chown -R builder:builder .
+          sudo -u builder makepkg -f --nodeps
+
+      - name: Allega lo .zst alla release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Rustman ${{ github.ref_name }}"
+          draft: true
+          files: pkgbuild/*.pkg.tar.zst
