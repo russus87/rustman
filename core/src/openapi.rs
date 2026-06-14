@@ -455,6 +455,7 @@ fn costruisci_richiesta(
         pre_script: String::new(),
         post_script: String::new(),
         impostazioni: Default::default(),
+        tags: Vec::new(),
     }
 }
 

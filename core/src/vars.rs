@@ -86,6 +86,7 @@ pub fn risolvi(r: &Richiesta, vars: &HashMap<String, String>) -> Richiesta {
         pre_script: r.pre_script.clone(),
         post_script: r.post_script.clone(),
         impostazioni: r.impostazioni.clone(),
+        tags: r.tags.clone(),
     }
 }
 

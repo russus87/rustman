@@ -18,6 +18,8 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Variabili dinamiche**: `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomUUID}}`, `{{$randomInt}}`, `{{$randomFloat}}`, con anteprima dell'URL risolto.
 - **Contract testing**: asserzione `schema` (JSON Schema), popolata in automatico dall'import OpenAPI.
 - **Command Palette** (Ctrl/Cmd+K) per aprire richieste, ambienti, viste e azioni.
+- **Ricerca/filtro** nell'albero, **tag** sulle richieste (e `--tag` in CLI),
+  **batch send** con scheduler e **confronto** affiancato delle risposte.
 - **Generatore di documentazione** HTML dalle collezioni.
 - **Cattura dal response**: dai campi JSON crei variabili o asserzioni con un click.
 - **Trend dei tempi** per endpoint nella History (sparkline, avg/p95).

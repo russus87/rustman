@@ -83,6 +83,9 @@ pub struct Richiesta {
     /// Impostazioni di rete della richiesta (timeout, redirect, TLS, retry 429).
     #[serde(default)]
     pub impostazioni: Impostazioni,
+    /// Etichette per organizzare/filtrare e per le suite (`--tag` nella CLI).
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Impostazioni di rete per-richiesta.

@@ -41,6 +41,8 @@ struct Opzioni {
     min_pass_rate: Option<f64>,
     /// Numero di esecuzioni per la flaky detection (0 = disattivata).
     flaky: u32,
+    /// Esegui solo le richieste con questo tag (suite).
+    tag: Option<String>,
 }
 
 /// Esito dell'esecuzione di una singola richiesta.
@@ -103,7 +105,7 @@ fn stampa_uso() {
         "Uso:\n\
 \x20 rustman run <workspace> [--env <nome>] [--collection <dir>] [--chain <nome>] \\\n\
 \x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] \\\n\
-\x20             [--update-snapshots] [--min-pass-rate <pct>] [--flaky <n>]\n\
+\x20             [--update-snapshots] [--min-pass-rate <pct>] [--flaky <n>] [--tag <tag>]\n\
 \x20 rustman perf <workspace> --request <file> [--env <nome>] [--n <N> | --duration <s>] \\\n\
 \x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--profile costante|spike|soak] \\\n\
 \x20             [--spike-rps <r>] [--max-p95 <ms>] [--max-error <pct>]\n\
@@ -213,6 +215,7 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
         update_snapshots: false,
         min_pass_rate: None,
         flaky: 0,
+        tag: None,
     };
     let mut i = 2;
     while i < args.len() {
@@ -238,6 +241,7 @@ fn analizza(args: &[String]) -> Result<Opzioni, String> {
             }
             "--min-pass-rate" => opz.min_pass_rate = Some(val()?.parse().map_err(|_| "--min-pass-rate richiede un numero")?),
             "--flaky" => opz.flaky = val()?.parse().map_err(|_| "--flaky richiede un numero")?,
+            "--tag" => opz.tag = Some(val()?),
             altro => return Err(format!("Opzione sconosciuta: {altro}")),
         }
         i += 2;
@@ -601,6 +605,13 @@ fn raccogli(figli: &[Nodo], out: &mut HashMap<String, Richiesta>) {
 }
 
 /// Decide quali richieste eseguire in base a --chain / --collection / (tutte).
+/// Filtra le richieste tenendo solo quelle col tag indicato (se presente).
+fn applica_filtro_tag(out: &mut Vec<(String, Richiesta)>, tag: &Option<String>) {
+    if let Some(t) = tag {
+        out.retain(|(_, r)| r.tags.iter().any(|x| x.eq_ignore_ascii_case(t)));
+    }
+}
+
 fn seleziona(
     root: &Path,
     opz: &Opzioni,
@@ -619,6 +630,7 @@ fn seleziona(
                 .ok_or_else(|| format!("Richiesta della catena non trovata: {}", passo.file))?;
             out.push((passo.file.clone(), r.clone()));
         }
+        applica_filtro_tag(&mut out, &opz.tag);
         return Ok(out);
     }
 
@@ -632,6 +644,7 @@ fn seleziona(
         .map(|(f, r)| (f.clone(), r.clone()))
         .collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
+    applica_filtro_tag(&mut out, &opz.tag);
     Ok(out)
 }
 

@@ -25,6 +25,38 @@
   } = $props();
 
   let nuovaColl = $state({ attiva: false, nome: "" });
+  let cerca = $state("");
+
+  // True se una richiesta combacia col testo cercato (nome/url/metodo/tag).
+  function combacia(r, q) {
+    return (
+      (r.nome || "").toLowerCase().includes(q) ||
+      (r.url || "").toLowerCase().includes(q) ||
+      (r.metodo || "").toLowerCase().includes(q) ||
+      (r.tags || []).some((t) => t.toLowerCase().includes(q))
+    );
+  }
+  // Filtra ricorsivamente i nodi: tiene le richieste che combaciano e le cartelle
+  // che hanno discendenti corrispondenti.
+  function filtra(figli, q) {
+    const out = [];
+    for (const n of figli) {
+      if (n.tipo === "cartella") {
+        const sub = filtra(n.figli, q);
+        if (sub.length) out.push({ ...n, figli: sub });
+      } else if (combacia(n.richiesta, q)) {
+        out.push(n);
+      }
+    }
+    return out;
+  }
+  const alberoFiltrato = $derived.by(() => {
+    const q = cerca.trim().toLowerCase();
+    if (!q) return albero;
+    return albero
+      .map((c) => ({ ...c, figli: filtra(c.figli, q) }))
+      .filter((c) => c.figli.length || c.nome.toLowerCase().includes(q));
+  });
   let fileInput;
   let driftInput;
   let covInput;
@@ -139,6 +171,13 @@
   </div>
 {/if}
 
+{#if albero.length > 0}
+  <div style="padding:6px 12px">
+    <input style="width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--txt);font-size:12px;outline:none"
+      placeholder="🔍 filtra (nome, url, metodo, tag)…" bind:value={cerca} />
+  </div>
+{/if}
+
 <div class="tree">
   {#if albero.length === 0}
     <div class="placeholder" style="height:auto;padding:24px 8px">
@@ -146,7 +185,10 @@
       <div>Usa <b>+</b> qui sopra per crearne una.</div>
     </div>
   {/if}
-  {#each albero as c}
+  {#each alberoFiltrato as c}
     <NodoAlbero nodo={{ tipo: "cartella", nome: c.nome, dir: c.dir, figli: c.figli }} livello={0} {attivo} {azioni} />
   {/each}
+  {#if cerca.trim() && alberoFiltrato.length === 0}
+    <div class="placeholder" style="height:auto;padding:16px 8px"><div>Nessun risultato.</div></div>
+  {/if}
 </div>

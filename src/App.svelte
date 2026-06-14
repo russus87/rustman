@@ -168,11 +168,15 @@
   }
   // Esegue tutte le richieste sotto una cartella/collezione e mostra una griglia.
   async function eseguiBatch(dir) {
+    const tab = { id: prossimoId++, tipo: "batch", dirBatch: dir, titolo: `Batch · ${dir}`, righe: [], inCorso: true, ognis: 0, _timer: null };
+    tabs.push(tab); tabAttivoId = tab.id;
+    await popolaBatch(tab);
+  }
+  async function popolaBatch(tab) {
+    tab.inCorso = true; tab.righe = [];
     const tutte = [];
     for (const c of albero) for (const n of appiattisci(c.figli, [])) tutte.push(n);
-    const sel = tutte.filter((n) => n.file.startsWith(dir + "/"));
-    const tab = { id: prossimoId++, tipo: "batch", titolo: `Batch · ${dir}`, righe: [], inCorso: true };
-    tabs.push(tab); tabAttivoId = tab.id;
+    const sel = tutte.filter((n) => n.file.startsWith(tab.dirBatch + "/"));
     for (const n of sel) {
       const req = structuredClone($state.snapshot(n.richiesta));
       const riga = { nome: req.nome || "(senza nome)", metodo: req.metodo, url: req.url, status: 0, tempo: 0, ok: 0, tot: 0, errore: null };
@@ -188,7 +192,27 @@
       tab.righe.push(riga);
     }
     tab.inCorso = false;
-    logga("ok", `Batch "${dir}": ${tab.righe.length} richieste eseguite`);
+  }
+  // Scheduler: ri-esegue il batch a intervalli nello stesso tab.
+  function pianificaBatch(tab, secondi) {
+    fermaBatch(tab);
+    if (secondi > 0) {
+      tab.ognis = secondi;
+      tab._timer = setInterval(() => popolaBatch(tab), secondi * 1000);
+      logga("ok", `Scheduler avviato: "${tab.dirBatch}" ogni ${secondi}s`);
+    }
+  }
+  function fermaBatch(tab) {
+    if (tab._timer) { clearInterval(tab._timer); tab._timer = null; }
+    tab.ognis = 0;
+  }
+
+  // Confronta le risposte di due tab aperti in un tab diff.
+  async function confrontaRisposte(a, b, etichetta) {
+    let righe = [];
+    try { righe = await api.diffTesti(a ?? "", b ?? ""); } catch (e) { console.error(e); }
+    const tab = { id: prossimoId++, tipo: "diff", file: null, titolo: `Diff · ${etichetta}`, righe };
+    tabs.push(tab); tabAttivoId = tab.id;
   }
 
   // Apre una nuova console WebSocket o SSE in un tab.
@@ -303,6 +327,7 @@
   function chiudiTab(id) {
     const i = tabs.findIndex((t) => t.id === id);
     if (i < 0) return;
+    if (tabs[i]._timer) clearInterval(tabs[i]._timer); // ferma lo scheduler del batch
     tabs.splice(i, 1);
     if (tabAttivoId === id) tabAttivoId = tabs.length ? tabs[Math.max(0, i - 1)].id : null;
   }
@@ -572,6 +597,15 @@
     out.push({ tag: "🔌", label: "Nuova connessione WebSocket", azione: () => nuovaConnessione("ws") });
     out.push({ tag: "🔌", label: "Nuova connessione SSE", azione: () => nuovaConnessione("sse") });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
+    // Confronto affiancato: diff della risposta attiva con un altro tab.
+    if (tabAttivo?.tipo === "request" && tabAttivo.risposta) {
+      for (const t of tabs) {
+        if (t.id !== tabAttivoId && t.tipo === "request" && t.risposta) {
+          out.push({ tag: "⇄", label: `Confronta risposta con: ${t.richiesta.nome || "(senza nome)"}`,
+            azione: () => confrontaRisposte(tabAttivo.risposta.body, t.risposta.body, `${tabAttivo.richiesta.nome} ↔ ${t.richiesta.nome}`) });
+        }
+      }
+    }
     return out;
   });
 
@@ -685,7 +719,10 @@
         {:else if tabAttivo.tipo === "socket"}
           <Socket tab={tabAttivo} />
         {:else if tabAttivo.tipo === "batch"}
-          <BatchResults titolo={tabAttivo.titolo} righe={tabAttivo.righe} inCorso={tabAttivo.inCorso} />
+          <BatchResults titolo={tabAttivo.titolo} righe={tabAttivo.righe} inCorso={tabAttivo.inCorso}
+            ognis={tabAttivo.ognis}
+            onPianifica={(s) => pianificaBatch(tabAttivo, s)}
+            onFerma={() => fermaBatch(tabAttivo)} />
         {:else}
           <div class="req-area" style="grid-template-columns: 1fr 5px {layout.right}px">
             <div class="editor-col">

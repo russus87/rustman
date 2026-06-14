@@ -68,6 +68,7 @@ fn converti_richiesta(req: HarReq) -> Richiesta {
         pre_script: String::new(),
         post_script: String::new(),
         impostazioni: Default::default(),
+        tags: Vec::new(),
     }
 }
 

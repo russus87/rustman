@@ -143,6 +143,7 @@
     if (richiesta && richiesta.impostazioni == null) {
       richiesta.impostazioni = { timeout_ms: 0, segui_redirect: true, verifica_tls: true, retry_429: 0 };
     }
+    if (richiesta && !Array.isArray(richiesta.tags)) richiesta.tags = [];
   });
 
   // OAuth2: chiede il token al server di autorizzazione e lo salva nella richiesta.
@@ -190,6 +191,9 @@
   <div class="editor-head">
     <span class="m {classeMetodo(richiesta.metodo)}">{richiesta.metodo}</span>
     <input class="nome-input" placeholder="Nome richiesta" bind:value={richiesta.nome} />
+    <input class="tags-input" placeholder="🏷 tag…" title="Tag separati da virgola"
+      value={(richiesta.tags || []).join(", ")}
+      oninput={(e) => (richiesta.tags = e.target.value.split(",").map((s) => s.trim()).filter(Boolean))} />
     <span class="he-spacer"></span>
     <select
       class="env-select"
@@ -568,6 +572,11 @@
   .mini-b:hover {
     background: #22222e;
   }
+  .tags-input {
+    width: 140px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 9px; color: var(--txt-dim); font-size: 12px; outline: none;
+  }
+  .tags-input:focus { border-color: var(--accent); color: var(--txt); }
   .ac-pop {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 40; margin-top: 2px;
     background: var(--panel); border: 1px solid var(--border-2); border-radius: 8px;
