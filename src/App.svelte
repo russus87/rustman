@@ -20,6 +20,7 @@
   import Editor from "./components/Editor.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
   import FolderConfig from "./components/FolderConfig.svelte";
+  import Socket from "./components/Socket.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -164,6 +165,15 @@
     };
     tabs.push(tab); tabAttivoId = tab.id;
   }
+  // Apre una nuova console WebSocket o SSE in un tab.
+  function nuovaConnessione(protocollo) {
+    const tab = {
+      id: prossimoId++, tipo: "socket", protocollo, url: "",
+      titolo: protocollo === "sse" ? "SSE" : "WebSocket",
+    };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
+
   // Aggiorna (approva) la baseline dello snapshot della richiesta attiva.
   async function aggiornaSnapshotAttivo() {
     const t = tabAttivo;
@@ -519,6 +529,8 @@
     out.push({ tag: "⚡", label: "Invia richiesta", hint: "Ctrl+Invio", azione: invia });
     out.push({ tag: "⚡", label: "Genera documentazione", azione: esportaDoc });
     out.push({ tag: "⚡", label: "Aggiorna snapshot (richiesta attiva)", azione: aggiornaSnapshotAttivo });
+    out.push({ tag: "🔌", label: "Nuova connessione WebSocket", azione: () => nuovaConnessione("ws") });
+    out.push({ tag: "🔌", label: "Nuova connessione SSE", azione: () => nuovaConnessione("sse") });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
     return out;
   });
@@ -628,6 +640,8 @@
             config={tabAttivo.config}
             onSalva={salvaConfigCartella}
           />
+        {:else if tabAttivo.tipo === "socket"}
+          <Socket tab={tabAttivo} />
         {:else}
           <div class="req-area" style="grid-template-columns: 1fr 5px {layout.right}px">
             <div class="editor-col">

@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.18.0";
+export const VERSIONE = "0.19.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.19.0",
+    voci: [
+      "Console WebSocket e SSE: connetti, invia/ricevi messaggi e stream di eventi live.",
+    ],
+  },
   {
     versione: "0.18.0",
     voci: [
