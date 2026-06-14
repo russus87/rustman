@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "1.0.0";
+export const VERSIONE = "1.0.1";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "1.0.1",
+    voci: [
+      "Pacchetto Arch Linux (.pkg.tar.zst) generato nelle release.",
+    ],
+  },
   {
     versione: "1.0.0",
     voci: [
