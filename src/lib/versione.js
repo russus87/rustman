@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.32.0";
+export const VERSIONE = "0.33.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.33.0",
+    voci: [
+      "I flussi (condizioni, catture di variabili, continua-al-fallimento) ora girano anche nella CLI (--chain), per la CI.",
+    ],
+  },
   {
     versione: "0.32.0",
     voci: [

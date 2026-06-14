@@ -43,7 +43,7 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Impostazioni per-richiesta** (timeout, redirect, verifica TLS, retry su 429),
   **cookie jar** di sessione e **rate-limit aware** (`Retry-After`).
 - **Run / flow builder**: catene di chiamate con **condizioni** (esegui solo se…),
-  **cattura di variabili** dalle risposte e "continua al fallimento".
+  **cattura di variabili** dalle risposte e "continua al fallimento" — anche da CLI (`--chain`).
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
   header, query, auth, body, script (`pm.*`), variabili di collezione e script ereditati.

@@ -14,7 +14,7 @@
 
 mod script;
 
-use rustman_core::model::{Nodo, Richiesta, RisultatoRun, RisultatoTest};
+use rustman_core::model::{Cattura, Condizione, Nodo, Passo, Richiesta, Risposta, RisultatoRun, RisultatoTest};
 use rustman_core::{http, storage, test, vars};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -344,9 +344,25 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
         raccogli(&coll.figli, &mut per_file);
     }
 
-    // Selezione delle richieste da eseguire (in ordine).
-    let selezione = seleziona(root, &opz, &per_file)?;
-    if selezione.is_empty() {
+    // Se è una catena, eseguiamo il flusso (con condizioni/catture); altrimenti
+    // una selezione piatta di richieste.
+    let passi: Option<Vec<Passo>> = match &opz.catena {
+        Some(nome) => {
+            let catene = storage::carica_catene(root).map_err(|e| e.to_string())?;
+            let cat = catene
+                .iter()
+                .find(|c| c.catena.nome.eq_ignore_ascii_case(nome))
+                .ok_or_else(|| format!("Catena '{nome}' non trovata."))?;
+            Some(cat.catena.passi.clone())
+        }
+        None => None,
+    };
+    let selezione = if passi.is_none() {
+        seleziona(root, &opz, &per_file)?
+    } else {
+        Vec::new()
+    };
+    if passi.is_none() && selezione.is_empty() {
         return Err("Nessuna richiesta da eseguire con i filtri indicati.".into());
     }
 
@@ -382,14 +398,18 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
             for (k, v) in riga {
                 variabili.insert(k.clone(), v.clone());
             }
-            for (file, richiesta) in &selezione {
-                // Applica gli header/auth ereditati dalle cartelle antenate.
-                let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
-                let req = storage::eredita(root, dir, richiesta);
-                esiti.push(
-                    esegui_richiesta(root, file, &req, &mut variabili, opz.retry, opz.delay, opz.update_snapshots)
-                        .await,
-                );
+            if let Some(passi) = &passi {
+                let r = esegui_flusso(root, passi, &per_file, &mut variabili, opz.retry, opz.delay, opz.update_snapshots).await;
+                esiti.extend(r);
+            } else {
+                for (file, richiesta) in &selezione {
+                    // Applica gli header/auth ereditati dalle cartelle antenate.
+                    let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+                    let req = storage::eredita(root, dir, richiesta);
+                    let (esito, _) =
+                        esegui_richiesta(root, file, &req, &mut variabili, opz.retry, opz.delay, opz.update_snapshots).await;
+                    esiti.push(esito);
+                }
             }
         }
     }
@@ -685,7 +705,7 @@ async fn esegui_richiesta(
     retry: u32,
     delay: u64,
     update_snapshots: bool,
-) -> Esito {
+) -> (Esito, Option<Risposta>) {
     let nome = if richiesta.nome.is_empty() {
         file.to_string()
     } else {
@@ -745,7 +765,7 @@ async fn esegui_richiesta(
                 let ok = risultati.iter().all(|x| x.passato);
                 if ok || tentativo == tentativi {
                     stampa_esito(&nome, &r, Some(&risposta), &risultati, None);
-                    return Esito {
+                    let esito = Esito {
                         nome,
                         metodo: r.metodo.clone(),
                         url: r.url.clone(),
@@ -755,6 +775,7 @@ async fn esegui_richiesta(
                         errore: None,
                         risultati,
                     };
+                    return (esito, Some(risposta));
                 }
                 eprintln!("  … tentativo {tentativo}/{tentativi} non passato, riprovo tra {delay}s");
             }
@@ -762,7 +783,7 @@ async fn esegui_richiesta(
                 if tentativo == tentativi {
                     let msg = e.to_string();
                     stampa_esito(&nome, &r, None, &[], Some(&msg));
-                    return Esito {
+                    let esito = Esito {
                         nome,
                         metodo: r.metodo.clone(),
                         url: r.url.clone(),
@@ -772,6 +793,7 @@ async fn esegui_richiesta(
                         errore: Some(msg),
                         risultati: Vec::new(),
                     };
+                    return (esito, None);
                 }
                 eprintln!("  … invio fallito ({e}), riprovo tra {delay}s");
             }
@@ -786,6 +808,124 @@ fn ok_test(det: &str) -> RisultatoTest {
 }
 fn ko_test(det: &str) -> RisultatoTest {
     RisultatoTest { descrizione: "snapshot".into(), passato: false, dettaglio: det.into() }
+}
+
+/// Esegue un flusso (catena con condizioni/catture): valuta la condizione sulla
+/// risposta precedente (salta il passo), invia, applica le catture, e
+/// prosegue/ferma secondo `al_fallimento`.
+async fn esegui_flusso(
+    root: &Path,
+    passi: &[Passo],
+    per_file: &HashMap<String, Richiesta>,
+    variabili: &mut HashMap<String, String>,
+    retry: u32,
+    delay: u64,
+    update_snapshots: bool,
+) -> Vec<Esito> {
+    let mut out = Vec::new();
+    let mut prev: Option<Risposta> = None;
+    for passo in passi {
+        if !valuta_condizione(&passo.condizione, prev.as_ref(), variabili) {
+            println!("  ↷ saltato: {}", passo.file);
+            continue;
+        }
+        let Some(richiesta) = per_file.get(&passo.file) else {
+            eprintln!("  ✗ richiesta della catena non trovata: {}", passo.file);
+            break;
+        };
+        let dir = passo.file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+        let req = storage::eredita(root, dir, richiesta);
+        let (esito, risposta) =
+            esegui_richiesta(root, &passo.file, &req, variabili, retry, delay, update_snapshots).await;
+        let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
+        if let Some(r) = &risposta {
+            let fatte = applica_catture(&passo.catture, r, variabili);
+            for (k, v) in &fatte {
+                println!("  ⇲ {k} = {v}");
+            }
+            prev = risposta;
+        }
+        out.push(esito);
+        if !ok && passo.al_fallimento != "continua" {
+            break;
+        }
+    }
+    out
+}
+
+/// Valuta la condizione di un passo sulla risposta precedente / variabili.
+fn valuta_condizione(
+    cond: &Option<Condizione>,
+    prev: Option<&Risposta>,
+    vars: &HashMap<String, String>,
+) -> bool {
+    let Some(c) = cond else { return true };
+    let ottenuto = match c.tipo.as_str() {
+        "status" => prev.map(|r| r.status.to_string()).unwrap_or_default(),
+        "var" => vars.get(&c.campo).cloned().unwrap_or_default(),
+        "json" => prev.and_then(|r| valore_json(&r.body, &c.campo)).unwrap_or_default(),
+        _ => String::new(),
+    };
+    confronta(&ottenuto, &c.operatore, &c.atteso)
+}
+
+/// Estrae i valori indicati dalla risposta e li salva nelle variabili.
+fn applica_catture(
+    catture: &[Cattura],
+    risposta: &Risposta,
+    vars: &mut HashMap<String, String>,
+) -> Vec<(String, String)> {
+    let mut fatte = Vec::new();
+    for c in catture {
+        if c.variabile.is_empty() {
+            continue;
+        }
+        let v = match c.da.as_str() {
+            "header" => risposta
+                .headers
+                .iter()
+                .find(|h| h.chiave.eq_ignore_ascii_case(&c.campo))
+                .map(|h| h.valore.clone()),
+            "body" => Some(risposta.body.clone()),
+            _ => valore_json(&risposta.body, &c.campo),
+        };
+        if let Some(v) = v {
+            vars.insert(c.variabile.clone(), v.clone());
+            fatte.push((c.variabile.clone(), v));
+        }
+    }
+    fatte
+}
+
+/// Naviga un body JSON con path puntato (es. "data.items.0.id").
+fn valore_json(body: &str, path: &str) -> Option<String> {
+    let radice: serde_json::Value = serde_json::from_str(body).ok()?;
+    let mut cur = &radice;
+    for parte in path.split('.').filter(|p| !p.is_empty()) {
+        cur = match cur {
+            serde_json::Value::Object(m) => m.get(parte)?,
+            serde_json::Value::Array(a) => a.get(parte.parse::<usize>().ok()?)?,
+            _ => return None,
+        };
+    }
+    Some(match cur {
+        serde_json::Value::String(s) => s.clone(),
+        altro => altro.to_string(),
+    })
+}
+
+fn confronta(ottenuto: &str, operatore: &str, atteso: &str) -> bool {
+    let (o, a) = (ottenuto.trim(), atteso.trim());
+    match operatore {
+        "==" => o == a,
+        "!=" => o != a,
+        "contiene" => o.contains(a),
+        "<" | ">" => match (o.parse::<f64>(), a.parse::<f64>()) {
+            (Ok(x), Ok(y)) => if operatore == "<" { x < y } else { x > y },
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 fn stampa_logs(logs: &[String]) {
