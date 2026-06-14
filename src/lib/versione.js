@@ -1,9 +1,16 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.27.0";
+export const VERSIONE = "0.28.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.28.0",
+    voci: [
+      "Auto-genera asserzioni dalla risposta (status + campi JSON) con un click.",
+      "Mock server dalle snapshot registrate: rustman mock <workspace> (dev offline con dati reali).",
+    ],
+  },
   {
     versione: "0.27.0",
     voci: [

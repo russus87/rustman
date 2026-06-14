@@ -110,41 +110,48 @@ fn stampa_uso() {
 \x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--profile costante|spike|soak] \\\n\
 \x20             [--spike-rps <r>] [--max-p95 <ms>] [--max-error <pct>]\n\
 \x20 rustman coverage <workspace> --spec <openapi.yaml|json>\n\
-\x20 rustman mock --spec <openapi.yaml|json> [--port <p>]"
+\x20 rustman mock (--spec <openapi> | <workspace>) [--port <p>]"
     );
 }
 
 /// Opzioni del sottocomando `mock`.
 struct OpzioniMock {
-    spec: String,
+    spec: Option<String>,
+    workspace: Option<PathBuf>,
     port: u16,
 }
 
 fn analizza_mock(args: &[String]) -> Result<OpzioniMock, String> {
-    let mut spec = String::new();
-    let mut port = 8080;
+    let mut o = OpzioniMock { spec: None, workspace: None, port: 8080 };
     let mut i = 1;
     while i < args.len() {
-        let flag = args[i].as_str();
-        let val = || args.get(i + 1).cloned().ok_or_else(|| format!("Manca il valore per {flag}"));
-        match flag {
-            "--spec" => spec = val()?,
-            "--port" => port = val()?.parse().map_err(|_| "--port richiede un numero")?,
-            altro => return Err(format!("Opzione sconosciuta: {altro}")),
+        let a = args[i].as_str();
+        match a {
+            "--spec" => { o.spec = args.get(i + 1).cloned(); i += 2; }
+            "--port" => { o.port = args.get(i + 1).and_then(|s| s.parse().ok()).ok_or("--port richiede un numero")?; i += 2; }
+            s if s.starts_with('-') => return Err(format!("Opzione sconosciuta: {s}")),
+            s => { o.workspace = Some(s.into()); i += 1; }
         }
-        i += 2;
     }
-    if spec.is_empty() {
-        return Err("Indica lo spec con --spec <file>.".into());
+    if o.spec.is_none() && o.workspace.is_none() {
+        return Err("Indica uno spec con --spec <file> oppure un <workspace> (mock dalle snapshot).".into());
     }
-    Ok(OpzioniMock { spec, port })
+    Ok(o)
 }
 
 /// Avvia il mock server: serve le risposte d'esempio dello spec OpenAPI.
 fn esegui_mock_cli(o: OpzioniMock) -> Result<bool, String> {
-    let spec = std::fs::read_to_string(&o.spec).map_err(|e| format!("spec '{}': {e}", o.spec))?;
-    let routes = rustman_core::openapi::mock_routes(&spec)
-        .ok_or("Lo spec non è un OpenAPI/Swagger valido")?;
+    let routes = if let Some(spec_path) = &o.spec {
+        let spec = std::fs::read_to_string(spec_path).map_err(|e| format!("spec '{spec_path}': {e}"))?;
+        rustman_core::openapi::mock_routes(&spec).ok_or("Lo spec non è un OpenAPI/Swagger valido")?
+    } else {
+        let ws = o.workspace.as_ref().unwrap();
+        let r = storage::mock_routes_da_snapshot(ws);
+        if r.is_empty() {
+            return Err("Nessuna snapshot trovata nel workspace (esegui prima le richieste con uno snapshot).".into());
+        }
+        r
+    };
     let server = tiny_http::Server::http(("0.0.0.0", o.port))
         .map_err(|e| format!("impossibile aprire la porta {}: {e}", o.port))?;
 

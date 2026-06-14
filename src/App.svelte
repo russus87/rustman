@@ -150,6 +150,26 @@
       logga("ok", `Variabile '${chiave}' = ${value} salvata in ${env.environment.nome}`);
     } catch (e) { logga("errore", `Salvataggio variabile fallito: ${e}`); }
   }
+  // Genera asserzioni di base dalla risposta (status + campi JSON di primo livello).
+  function autoTest(risposta) {
+    const t = tabAttivo;
+    if (!t || t.tipo !== "request") return;
+    if (!t.richiesta.tests) t.richiesta.tests = [];
+    t.richiesta.tests.push({ tipo: "status", operatore: "==", campo: "", atteso: String(risposta.status), attivo: true });
+    let n = 1;
+    try {
+      const obj = JSON.parse(risposta.body);
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        for (const [k, v] of Object.entries(obj).slice(0, 6)) {
+          if (v === null || typeof v !== "object") {
+            t.richiesta.tests.push({ tipo: "json", operatore: "==", campo: k, atteso: String(v), attivo: true });
+            n++;
+          }
+        }
+      }
+    } catch { /* body non JSON */ }
+    logga("ok", `${n} asserzioni generate dalla risposta`);
+  }
   // Crea un'asserzione json sul tab attivo dal campo catturato.
   function creaTest(path, value) {
     const t = tabAttivo;
@@ -777,6 +797,7 @@
                 avvisiSicurezza={tabAttivo.avvisiSicurezza ?? []}
                 onCapturaVar={capturaVar}
                 onCreaTest={creaTest}
+                onAutoTest={autoTest}
               />
               <Splitter direction="row" onResize={(d) => ridimensiona("perf", -d, 120, 700)} />
               <Performance richiesta={tabAttivo.richiesta} variabili={variabiliAttive} />

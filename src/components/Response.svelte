@@ -1,6 +1,6 @@
 <script>
   // Pannello della risposta: mostra status, metriche, corpo, intestazioni ed esiti dei test.
-  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest } = $props();
+  let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest } = $props();
 
   let tab = $state("Body"); // Body | Headers | Tests
   let cattura = $state(false); // mostra l'elenco dei campi JSON catturabili
@@ -44,6 +44,7 @@
       <span class="badge {risposta.status < 400 ? 'ok' : 'err'}">{risposta.status} {risposta.status_text}</span>
       <span class="resp-meta">{risposta.tempo_ms} ms</span>
       <span class="resp-meta">{dimensione(risposta.dimensione)}</span>
+      <span class="gen-test" title="Genera asserzioni dalla risposta" onclick={() => onAutoTest?.(risposta)}>＋ test</span>
     {/if}
   </div>
 
@@ -169,6 +170,8 @@
   .sec-liv.alto { color: #f8918c; background: rgba(248,81,73,.15); }
   .sec-liv.medio { color: #e2b340; background: rgba(226,179,64,.15); }
   .sec-liv.info { color: #9aa7b8; background: var(--panel-3); }
+  .gen-test { cursor: pointer; font-size: 11.5px; color: var(--txt-faint); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+  .gen-test:hover { color: var(--accent); border-color: var(--accent); }
   .test-desc {
     font-family: var(--mono);
     color: var(--txt);

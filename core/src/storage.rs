@@ -550,6 +550,57 @@ pub fn salva_snapshot(root: &Path, file: &str, body: &str) -> io::Result<()> {
     fs::write(dir.join(chiave_snap(file)), body)
 }
 
+/// Costruisce le rotte mock dalle baseline registrate (golden): per ogni
+/// richiesta con uno snapshot, serve quel body sul metodo+path normalizzato.
+pub fn mock_routes_da_snapshot(root: &Path) -> Vec<crate::model::MockRoute> {
+    let albero = carica_albero(root).unwrap_or_default();
+    let mut routes = Vec::new();
+    raccogli_mock_snapshot(root, &albero_in_nodi(&albero), &mut routes);
+    routes
+}
+
+fn albero_in_nodi(albero: &Albero) -> Vec<Nodo> {
+    albero
+        .iter()
+        .map(|c| Nodo::Cartella {
+            nome: c.nome.clone(),
+            dir: c.dir.clone(),
+            figli: c.figli.clone(),
+        })
+        .collect()
+}
+
+fn raccogli_mock_snapshot(root: &Path, figli: &[Nodo], out: &mut Vec<crate::model::MockRoute>) {
+    for n in figli {
+        match n {
+            Nodo::Cartella { figli, .. } => raccogli_mock_snapshot(root, figli, out),
+            Nodo::Richiesta { file, richiesta, .. } => {
+                if let Some(body) = carica_snapshot(root, file) {
+                    out.push(crate::model::MockRoute {
+                        metodo: richiesta.metodo.to_uppercase(),
+                        path: path_da_url(&richiesta.url),
+                        status: 200,
+                        body,
+                        content_type: "application/json".into(),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Path templato da un URL di richiesta ("{{base_url}}/pets/{{id}}" → "/pets/{id}").
+fn path_da_url(url: &str) -> String {
+    let dopo_host = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    let path = match dopo_host.find('/') {
+        Some(i) => &dopo_host[i..],
+        None => "/",
+    };
+    let path = path.split('?').next().unwrap_or(path);
+    // Se l'URL inizia con una variabile (es. {{base_url}}/...), prendi dal primo '/'.
+    path.replace("{{", "{").replace("}}", "}")
+}
+
 /// Valuta lo snapshot: se non c'è baseline la registra (e passa); altrimenti
 /// confronta il body con la baseline ignorando gli `ignora` indicati.
 pub fn valuta_snapshot(
