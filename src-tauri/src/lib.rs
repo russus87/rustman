@@ -151,6 +151,14 @@ fn genera_doc(app: tauri::AppHandle) -> Result<String, String> {
     Ok(doc::genera(&albero))
 }
 
+/// Esporta tutte le collezioni in uno spec OpenAPI 3.0 (JSON).
+#[tauri::command]
+fn esporta_openapi(app: tauri::AppHandle) -> Result<String, String> {
+    let root = workspace(&app)?;
+    let albero = storage::carica_albero(&root).map_err(|e| e.to_string())?;
+    Ok(openapi::esporta(&albero))
+}
+
 /// Risolve i `{{segnaposto}}` in un testo (per l'anteprima nell'editor).
 #[tauri::command]
 fn anteprima(testo: String, variabili: Option<HashMap<String, String>>) -> String {
@@ -607,6 +615,7 @@ pub fn run() {
             genera_codice,
             diff_testi,
             genera_doc,
+            esporta_openapi,
             anteprima,
             trova_sostituisci,
             drift_openapi,

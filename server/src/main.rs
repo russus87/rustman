@@ -317,6 +317,11 @@ async fn h_genera_doc(State(s): State<Stato>) -> Result<Json<String>, Errore> {
     Ok(Json(doc::genera(&albero)))
 }
 
+async fn h_esporta_openapi(State(s): State<Stato>) -> Result<Json<String>, Errore> {
+    let albero = storage::carica_albero(&s.root()).map_err(err)?;
+    Ok(Json(openapi::esporta(&albero)))
+}
+
 async fn h_anteprima(Json(r): Json<AnteprimaReq>) -> Json<String> {
     Json(vars::sostituisci(&r.testo, &r.variabili.unwrap_or_default()))
 }
@@ -664,6 +669,7 @@ async fn main() {
         .route("/api/pulisci_storia", post(h_pulisci_storia))
         .route("/api/diff_testi", post(h_diff_testi))
         .route("/api/genera_doc", post(h_genera_doc))
+        .route("/api/esporta_openapi", post(h_esporta_openapi))
         .route("/api/anteprima", post(h_anteprima))
         .route("/api/trova_sostituisci", post(h_trova_sostituisci))
         .route("/api/drift_openapi", post(h_drift_openapi))

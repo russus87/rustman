@@ -41,6 +41,7 @@ export const importaCurl = (comando) => call("importa_curl", { comando });
 // ---- Diff / Doc / Anteprima ----
 export const diffTesti = (vecchio, nuovo) => call("diff_testi", { vecchio, nuovo });
 export const generaDoc = () => call("genera_doc");
+export const esportaOpenapi = () => call("esporta_openapi");
 export const anteprima = (testo, variabili) =>
   call("anteprima", { testo, variabili: variabili ?? null });
 

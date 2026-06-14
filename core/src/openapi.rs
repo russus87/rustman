@@ -58,6 +58,84 @@ pub fn confronta(vecchio: &str, nuovo: &str) -> Option<DriftReport> {
     Some(report)
 }
 
+/// Esporta l'albero delle collezioni in uno spec OpenAPI 3.0 (JSON).
+pub fn esporta(albero: &[Collezione]) -> String {
+    let mut paths = serde_json::Map::new();
+    for coll in albero {
+        raccogli_export(&coll.figli, &coll.nome, &mut paths);
+    }
+    let spec = json!({
+        "openapi": "3.0.0",
+        "info": { "title": "Rustman export", "version": "1.0.0" },
+        "paths": paths
+    });
+    serde_json::to_string_pretty(&spec).unwrap_or_else(|_| "{}".into())
+}
+
+fn raccogli_export(figli: &[Nodo], tag: &str, paths: &mut serde_json::Map<String, Value>) {
+    for n in figli {
+        match n {
+            Nodo::Cartella { figli, .. } => raccogli_export(figli, tag, paths),
+            Nodo::Richiesta { richiesta, .. } => esporta_richiesta(richiesta, tag, paths),
+        }
+    }
+}
+
+fn esporta_richiesta(r: &Richiesta, tag: &str, paths: &mut serde_json::Map<String, Value>) {
+    let path = url_a_path(&r.url);
+    let metodo = r.metodo.to_lowercase();
+
+    // Parametri: query attivi + header attivi (esclusa l'Authorization).
+    let mut parametri: Vec<Value> = Vec::new();
+    for p in r.params.iter().filter(|p| p.attivo && !p.chiave.is_empty()) {
+        parametri.push(json!({ "name": p.chiave, "in": "query",
+            "schema": {"type": "string"}, "example": p.valore }));
+    }
+    for h in r.headers.iter().filter(|h| h.attivo && !h.chiave.is_empty()) {
+        if h.chiave.eq_ignore_ascii_case("authorization") {
+            continue;
+        }
+        parametri.push(json!({ "name": h.chiave, "in": "header",
+            "schema": {"type": "string"}, "example": h.valore }));
+    }
+
+    let mut op = serde_json::Map::new();
+    op.insert("tags".into(), json!([tag]));
+    if !r.nome.is_empty() {
+        op.insert("summary".into(), json!(r.nome));
+    }
+    op.insert("parameters".into(), json!(parametri));
+
+    // Corpo: dall'esempio raw (JSON se possibile).
+    if !r.body.is_empty() && r.body_mode == "raw" {
+        let esempio: Value =
+            serde_json::from_str(&r.body).unwrap_or_else(|_| Value::String(r.body.clone()));
+        let tipo = if esempio.is_string() { "text/plain" } else { "application/json" };
+        op.insert(
+            "requestBody".into(),
+            json!({ "content": { tipo: { "example": esempio } } }),
+        );
+    }
+    op.insert("responses".into(), json!({ "200": { "description": "OK" } }));
+
+    let voce = paths.entry(path).or_insert_with(|| json!({}));
+    if let Some(map) = voce.as_object_mut() {
+        map.insert(metodo, Value::Object(op));
+    }
+}
+
+/// Trasforma un URL di richiesta in un path OpenAPI: rimuove host e query,
+/// e converte i segnaposto `{{x}}` in `{x}`.
+fn url_a_path(url: &str) -> String {
+    let dopo_host = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    let path = match dopo_host.find('/') {
+        Some(i) => &dopo_host[i..],
+        None => "/",
+    };
+    let path = path.split('?').next().unwrap_or(path);
+    path.replace("{{", "{").replace("}}", "}")
+}
+
 /// Copertura: quali operazioni dello spec hanno una richiesta con asserzioni.
 pub fn coverage(spec: &str, albero: &[Collezione]) -> Option<CoverageReport> {
     let ops = endpoints(spec)?;
@@ -753,6 +831,33 @@ components:
         assert_eq!(cov.totali, 2);
         assert_eq!(cov.coperti, 1);
         assert_eq!(cov.scoperti, vec!["GET /pets"]);
+    }
+
+    #[test]
+    fn esporta_openapi_roundtrip() {
+        use crate::model::{Collezione, Header, Richiesta};
+        let r = Richiesta {
+            nome: "Crea utente".into(),
+            metodo: "POST".into(),
+            url: "{{base_url}}/users/{{id}}".into(),
+            params: vec![Header { chiave: "lang".into(), valore: "it".into(), attivo: true }],
+            body: "{\"nome\":\"Mario\"}".into(),
+            body_mode: "raw".into(),
+            ..Default::default()
+        };
+        let albero = vec![Collezione {
+            nome: "Users".into(), dir: "users".into(),
+            figli: vec![Nodo::Richiesta { nome: "Crea utente".into(), file: "users/c.json".into(), richiesta: r }],
+        }];
+        let spec = esporta(&albero);
+        // Lo spec generato è re-importabile.
+        let (coll, _) = riconosci(&spec).expect("spec valido");
+        let NodoExport::Cartella { nome, figli } = &coll.figli[0] else { panic!() };
+        assert_eq!(nome, "Users");
+        let NodoExport::Richiesta { richiesta } = &figli[0] else { panic!() };
+        assert_eq!(richiesta.metodo, "POST");
+        assert_eq!(richiesta.url, "{{base_url}}/users/{{id}}");
+        assert!(richiesta.params.iter().any(|p| p.chiave == "lang"));
     }
 
     #[test]

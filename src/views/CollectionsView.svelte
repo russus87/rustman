@@ -15,6 +15,7 @@
     onEsporta,
     onImporta,
     onGeneraDoc,
+    onEsportaOpenapi,
     onTrovaSostituisci,
     onDrift,
     onConfigCartella,
@@ -90,6 +91,9 @@
     </span>
     <span class="side-add" title="Confronto OpenAPI (drift): scegli 2 file" onclick={() => driftInput.click()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7h12M8 7l3-3M8 7l3 3M16 17H4M16 17l-3-3M16 17l-3 3"/></svg>
+    </span>
+    <span class="side-add" title="Esporta in OpenAPI" onclick={() => onEsportaOpenapi?.()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V9M8 13l4-4 4 4M5 3h14"/></svg>
     </span>
     <span class="side-add" title="Coverage delle API (scegli uno spec OpenAPI)" onclick={() => covInput.click()}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>

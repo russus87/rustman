@@ -220,6 +220,19 @@
     } catch (e) { logga("errore", `Drift fallito: ${e}`); }
   }
 
+  // Esporta le collezioni in uno spec OpenAPI e lo scarica.
+  async function esportaOpenapi() {
+    try {
+      const spec = await api.esportaOpenapi();
+      const blob = new Blob([spec], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "rustman-openapi.json";
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      logga("ok", "Spec OpenAPI esportato");
+    } catch (e) { logga("errore", `Export OpenAPI fallito: ${e}`); }
+  }
+
   // Genera la documentazione HTML e la scarica come file.
   async function esportaDoc() {
     try {
@@ -527,6 +540,7 @@
           onEsporta={esportaCollezione}
           onImporta={importaCollezione}
           onGeneraDoc={esportaDoc}
+          onEsportaOpenapi={esportaOpenapi}
           onTrovaSostituisci={trovaSostituisci}
           onDrift={confrontaDrift}
           onConfigCartella={apriConfigCartella}

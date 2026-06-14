@@ -31,8 +31,8 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - Import/export delle collezioni, workspace multipli, autosalvataggio.
 - **Import da Postman** (Collection v2.x ed Environment): cartelle, richieste,
   header, query, auth, body, script (`pm.*`), variabili di collezione e script ereditati.
-- **Import da OpenAPI/Swagger** (3.x e 2.0, JSON o YAML): operazioni raggruppate
-  per tag, parametri, corpo d'esempio dallo schema e base URL come ambiente.
+- **Import/Export da OpenAPI/Swagger** (3.x e 2.0, JSON o YAML): operazioni
+  raggruppate per tag, parametri, corpo d'esempio dallo schema e base URL come ambiente.
 - **CLI headless** (`rustman run`): esegue collezioni/catene in CI con report JUnit.
 
 ## Sviluppo
