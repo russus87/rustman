@@ -59,7 +59,8 @@ async fn main() -> ExitCode {
         Some("run") => analizza(&argomenti).map(EsitoCmd::Run),
         Some("perf") => analizza_perf(&argomenti).map(EsitoCmd::Perf),
         Some("coverage") => analizza_coverage(&argomenti).map(EsitoCmd::Coverage),
-        _ => Err("Comando mancante o sconosciuto (usa: run | perf | coverage).".into()),
+        Some("mock") => analizza_mock(&argomenti).map(EsitoCmd::Mock),
+        _ => Err("Comando mancante o sconosciuto (usa: run | perf | coverage | mock).".into()),
     };
     let cmd = match esito {
         Ok(c) => c,
@@ -74,6 +75,7 @@ async fn main() -> ExitCode {
         EsitoCmd::Run(o) => esegui(o).await,
         EsitoCmd::Perf(o) => esegui_perf_cli(o).await,
         EsitoCmd::Coverage(o) => esegui_coverage_cli(o),
+        EsitoCmd::Mock(o) => esegui_mock_cli(o),
     };
     match risultato {
         Ok(true) => ExitCode::SUCCESS,
@@ -89,6 +91,7 @@ enum EsitoCmd {
     Run(Opzioni),
     Perf(OpzioniPerfCli),
     Coverage(OpzioniCoverage),
+    Mock(OpzioniMock),
 }
 
 fn stampa_uso() {
@@ -98,8 +101,88 @@ fn stampa_uso() {
 \x20             [--data <file>] [--retry <n>] [--delay <s>] [--junit <f>] [--report-html <f>] [--update-snapshots]\n\
 \x20 rustman perf <workspace> --request <file> [--env <nome>] [--n <N> | --duration <s>] \\\n\
 \x20             [--concurrency <c>] [--rps <r>] [--warmup <s>] [--max-p95 <ms>] [--max-error <pct>]\n\
-\x20 rustman coverage <workspace> --spec <openapi.yaml|json>"
+\x20 rustman coverage <workspace> --spec <openapi.yaml|json>\n\
+\x20 rustman mock --spec <openapi.yaml|json> [--port <p>]"
     );
+}
+
+/// Opzioni del sottocomando `mock`.
+struct OpzioniMock {
+    spec: String,
+    port: u16,
+}
+
+fn analizza_mock(args: &[String]) -> Result<OpzioniMock, String> {
+    let mut spec = String::new();
+    let mut port = 8080;
+    let mut i = 1;
+    while i < args.len() {
+        let flag = args[i].as_str();
+        let val = || args.get(i + 1).cloned().ok_or_else(|| format!("Manca il valore per {flag}"));
+        match flag {
+            "--spec" => spec = val()?,
+            "--port" => port = val()?.parse().map_err(|_| "--port richiede un numero")?,
+            altro => return Err(format!("Opzione sconosciuta: {altro}")),
+        }
+        i += 2;
+    }
+    if spec.is_empty() {
+        return Err("Indica lo spec con --spec <file>.".into());
+    }
+    Ok(OpzioniMock { spec, port })
+}
+
+/// Avvia il mock server: serve le risposte d'esempio dello spec OpenAPI.
+fn esegui_mock_cli(o: OpzioniMock) -> Result<bool, String> {
+    let spec = std::fs::read_to_string(&o.spec).map_err(|e| format!("spec '{}': {e}", o.spec))?;
+    let routes = rustman_core::openapi::mock_routes(&spec)
+        .ok_or("Lo spec non è un OpenAPI/Swagger valido")?;
+    let server = tiny_http::Server::http(("0.0.0.0", o.port))
+        .map_err(|e| format!("impossibile aprire la porta {}: {e}", o.port))?;
+
+    println!("Mock server su http://localhost:{} — {} rotte:", o.port, routes.len());
+    for r in &routes {
+        println!("  {} {}", r.metodo, r.path);
+    }
+    println!("(Ctrl+C per fermare)");
+
+    for req in server.incoming_requests() {
+        let metodo = req.method().as_str().to_uppercase();
+        let url = req.url().to_string();
+        let path = url.split('?').next().unwrap_or(&url).to_string();
+
+        let trovata = routes
+            .iter()
+            .find(|r| r.metodo == metodo && match_path(&r.path, &path));
+        let (status, body) = match trovata {
+            Some(r) => {
+                println!("{metodo} {path} → {}", r.status);
+                (r.status, r.body.clone())
+            }
+            None => {
+                println!("{metodo} {path} → 404");
+                (404, "{\"error\":\"not found\"}".to_string())
+            }
+        };
+        let resp = tiny_http::Response::from_string(body)
+            .with_status_code(status)
+            .with_header(intestazione("Content-Type", "application/json"))
+            .with_header(intestazione("Access-Control-Allow-Origin", "*"));
+        let _ = req.respond(resp);
+    }
+    Ok(true)
+}
+
+fn intestazione(k: &str, v: &str) -> tiny_http::Header {
+    tiny_http::Header::from_bytes(k.as_bytes(), v.as_bytes()).unwrap()
+}
+
+/// Confronta un path templato ("/pets/{id}") con un path concreto ("/pets/7").
+fn match_path(templato: &str, concreto: &str) -> bool {
+    let a: Vec<&str> = templato.trim_matches('/').split('/').collect();
+    let b: Vec<&str> = concreto.trim_matches('/').split('/').collect();
+    a.len() == b.len()
+        && a.iter().zip(&b).all(|(t, c)| t.starts_with('{') || t == c)
 }
 
 /// Analizza gli argomenti: serve il sottocomando `run` e il percorso workspace.

@@ -12,7 +12,7 @@
 
 use crate::model::{
     Asserzione, Auth, CampoForm, Collezione, CoverageReport, DriftReport, Environment,
-    EsportaCollezione, Header, Nodo, NodoExport, Richiesta, Variabile,
+    EsportaCollezione, Header, MockRoute, Nodo, NodoExport, Richiesta, Variabile,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -56,6 +56,54 @@ pub fn confronta(vecchio: &str, nuovo: &str) -> Option<DriftReport> {
         }
     }
     Some(report)
+}
+
+/// Costruisce le rotte del mock server da uno spec: per ogni operazione, la
+/// risposta 2xx d'esempio (dagli `example`/`examples` o generata dallo schema).
+pub fn mock_routes(contenuto: &str) -> Option<Vec<MockRoute>> {
+    let spec: Spec = serde_json::from_str(contenuto)
+        .ok()
+        .or_else(|| serde_yaml::from_str(contenuto).ok())?;
+    if spec.openapi.is_empty() && spec.swagger.is_empty() {
+        return None;
+    }
+    let comps = componenti(&spec);
+    let mut routes = Vec::new();
+    for (path, item) in &spec.paths {
+        for (metodo, op) in item.operazioni() {
+            let Some(op) = op else { continue };
+            // Prima risposta 2xx (o la prima disponibile).
+            let resp = op
+                .responses
+                .iter()
+                .find(|(c, _)| c.starts_with('2'))
+                .or_else(|| op.responses.iter().next());
+            let (status, body) = match resp {
+                Some((code, r)) => {
+                    let status = code.parse::<u16>().unwrap_or(200);
+                    let val = r
+                        .content
+                        .get("application/json")
+                        .or_else(|| r.content.values().next())
+                        .and_then(|mt| mt.esempio(&comps))
+                        .or_else(|| r.schema.as_ref().map(|s| esempio_da_schema(s, &comps, 0)));
+                    let body = val
+                        .map(|v| serde_json::to_string_pretty(&v).unwrap_or_default())
+                        .unwrap_or_default();
+                    (status, body)
+                }
+                None => (200, String::new()),
+            };
+            routes.push(MockRoute {
+                metodo: metodo.to_uppercase(),
+                path: path.clone(),
+                status,
+                body,
+                content_type: "application/json".into(),
+            });
+        }
+    }
+    Some(routes)
 }
 
 /// Esporta l'albero delle collezioni in uno spec OpenAPI 3.0 (JSON).
@@ -858,6 +906,21 @@ components:
         assert_eq!(richiesta.metodo, "POST");
         assert_eq!(richiesta.url, "{{base_url}}/users/{{id}}");
         assert!(richiesta.params.iter().any(|p| p.chiave == "lang"));
+    }
+
+    #[test]
+    fn mock_routes_da_esempio_e_schema() {
+        let spec = r#"{"openapi":"3.0.0","paths":{
+            "/pets":{"get":{"responses":{"200":{"content":{"application/json":{"example":[{"id":1}]}}}}}},
+            "/pets/{id}":{"get":{"responses":{"200":{"content":{"application/json":{"schema":{
+                "type":"object","properties":{"id":{"type":"integer"},"nome":{"type":"string"}}}}}}}}}
+        }}"#;
+        let routes = mock_routes(spec).expect("spec valido");
+        assert_eq!(routes.len(), 2);
+        let pets = routes.iter().find(|r| r.path == "/pets").unwrap();
+        assert!(pets.body.contains("\"id\""));
+        let pet = routes.iter().find(|r| r.path == "/pets/{id}").unwrap();
+        assert!(pet.body.contains("\"nome\"")); // generato dallo schema
     }
 
     #[test]

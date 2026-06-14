@@ -75,6 +75,8 @@ cargo run -p rustman-cli -- perf <workspace> --request demo/get.json \
   --duration 30 --concurrency 20 --rps 50 --max-p95 200 --max-error 1
 # copertura delle API rispetto a uno spec OpenAPI
 cargo run -p rustman-cli -- coverage <workspace> --spec openapi.yaml
+# mock server: serve le risposte d'esempio dello spec (dev senza backend)
+cargo run -p rustman-cli -- mock --spec openapi.yaml --port 8080
 ```
 
 ## Struttura

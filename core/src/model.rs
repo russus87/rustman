@@ -325,6 +325,17 @@ pub struct RisultatoRun {
     pub tests: Vec<RisultatoTest>,
 }
 
+/// Una rotta del mock server: metodo + path (templato) e la risposta canned.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MockRoute {
+    pub metodo: String,
+    /// Path OpenAPI, es. "/pets/{petId}".
+    pub path: String,
+    pub status: u16,
+    pub body: String,
+    pub content_type: String,
+}
+
 /// Report del confronto fra due spec OpenAPI (drift detection).
 /// Ogni voce è una stringa tipo "GET /pets".
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

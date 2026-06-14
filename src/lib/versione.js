@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.17.0";
+export const VERSIONE = "0.18.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.18.0",
+    voci: [
+      "Mock server (CLI): serve le risposte d'esempio di uno spec OpenAPI (dev senza backend).",
+    ],
+  },
   {
     versione: "0.17.0",
     voci: [
