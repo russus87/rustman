@@ -74,6 +74,11 @@ export const aggiornaSnapshot = (file, body) => call("aggiorna_snapshot", { file
 export const coverageOpenapi = (spec) => call("coverage_openapi", { spec });
 export const generaReport = (esiti, titolo) => call("genera_report", { esiti, titolo });
 
+// ---- Trend dei test ----
+export const caricaRuns = () => call("carica_runs");
+export const registraRun = (run) => call("registra_run", { run });
+export const pulisciRuns = () => call("pulisci_runs");
+
 // ---- Collection / cartelle ----
 export const percorsoWorkspace = () => call("percorso_workspace");
 export const caricaAlbero = () => call("carica_albero");

@@ -1,7 +1,12 @@
 <script>
   // Vista "History": cronologia delle richieste inviate, con replay (riapertura
   // della richiesta) e confronto (diff) di due risposte.
-  let { storia = [], onApri, onPulisci, onAggiorna, onConfronta } = $props();
+  let { storia = [], runs = [], onApri, onPulisci, onAggiorna, onConfronta } = $props();
+
+  // Serie del pass-rate (%) per il trend dei test, dal più vecchio al più recente.
+  const passRate = $derived(
+    [...runs].reverse().map((r) => (r.totali ? (r.ok / r.totali) * 100 : 0))
+  );
 
   let modo = $state("lista"); // lista | andamento
 
@@ -67,12 +72,38 @@
 <div class="sto-head">
   HISTORY
   <span class="seg" class:on={modo === "lista"} onclick={() => (modo = "lista")}>Lista</span>
-  <span class="seg" class:on={modo === "andamento"} onclick={() => (modo = "andamento")}>Andamento</span>
+  <span class="seg" class:on={modo === "andamento"} onclick={() => (modo = "andamento")}>Tempi</span>
+  <span class="seg" class:on={modo === "test"} onclick={() => (modo = "test")}>Test</span>
   <span class="act" title="Aggiorna" onclick={onAggiorna}>⟳</span>
   <span class="act" title="Svuota cronologia" onclick={onPulisci}>🗑</span>
 </div>
 
-{#if modo === "andamento"}
+{#if modo === "test"}
+  <div class="sto-list">
+    {#if runs.length}
+      <div class="trend">
+        <div class="t-url">Pass-rate dei test ({runs.length} esecuzioni)</div>
+        <div class="t-riga">
+          <svg class="spark" viewBox="0 0 90 22" preserveAspectRatio="none">
+            <polyline points={sparkline(passRate, 100)} fill="none" stroke="var(--green)" stroke-width="1.5" />
+          </svg>
+          <span class="t-stat">ultimo {runs[0].ok}/{runs[0].totali}</span>
+        </div>
+      </div>
+      {#each runs.slice(0, 40) as r}
+        <div class="trend">
+          <div class="t-riga">
+            <span class="st {r.ko === 0 ? 'ok' : 'ko'}">{r.ok}/{r.totali}</span>
+            <span class="t-stat" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{r.etichetta}</span>
+            <span class="t-stat" style="margin-left:auto">{quando(r.quando)}</span>
+          </div>
+        </div>
+      {/each}
+    {:else}
+      <div class="vuoto">Nessun test eseguito.</div>
+    {/if}
+  </div>
+{:else if modo === "andamento"}
   <div class="sto-list">
     {#each gruppi as g}
       <div class="trend">

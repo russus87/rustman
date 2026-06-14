@@ -33,6 +33,7 @@
   let environments = $state([]);
   let ambienteAttivo = $state(null);
   let storia = $state([]);
+  let runs = $state([]);
 
   // Nome dell'ambiente attivo (per la cronologia).
   const nomeAmbienteAttivo = $derived.by(() => {
@@ -70,11 +71,14 @@
   async function ricaricaStoria() {
     try { storia = await api.caricaStoria(); } catch (e) { console.error(e); }
   }
+  async function ricaricaRuns() {
+    try { runs = await api.caricaRuns(); } catch (e) { console.error(e); }
+  }
   async function pulisciStoria() {
     try { await api.pulisciStoria(); storia = []; } catch (e) { console.error(e); }
   }
   onMount(async () => {
-    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria()]);
+    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns()]);
   });
 
   // ---------------- History / replay ----------------
@@ -303,6 +307,15 @@
       for (const l of [...pre.logs, ...post.logs]) logga("info", l);
       const ko = t.risultatiTest.filter((x) => !x.passato).length;
       if (ko) logga("errore", `${ko} test falliti`);
+      // Trend dei test: registra il riassunto dell'esecuzione.
+      if (t.risultatiTest.length) {
+        const okN = t.risultatiTest.length - ko;
+        try {
+          await api.registraRun({ quando: new Date().toISOString(), totali: t.risultatiTest.length,
+            ok: okN, ko, etichetta: req.nome || req.url });
+          if (vista === "storia") await ricaricaRuns();
+        } catch (e) { console.error(e); }
+      }
       // Registra nella cronologia (la richiesta com'è in editor, per il replay).
       try {
         await api.aggiungiStoria({
@@ -551,8 +564,9 @@
       {:else if vista === "storia"}
         <HistoryView
           {storia}
+          {runs}
           onApri={apriDaStoria}
-          onAggiorna={ricaricaStoria}
+          onAggiorna={() => { ricaricaStoria(); ricaricaRuns(); }}
           onPulisci={pulisciStoria}
           onConfronta={confrontaStoria}
         />

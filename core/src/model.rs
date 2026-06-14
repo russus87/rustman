@@ -286,6 +286,19 @@ fn versione_uno() -> u32 {
     1
 }
 
+/// Riassunto di un'esecuzione di test, per il trend storico del pass-rate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunSummary {
+    /// Data/ora ISO dell'esecuzione.
+    pub quando: String,
+    pub totali: usize,
+    pub ok: usize,
+    pub ko: usize,
+    /// Etichetta (es. nome della richiesta o della catena).
+    #[serde(default)]
+    pub etichetta: String,
+}
+
 /// Report di copertura: quali operazioni dello spec OpenAPI hanno (o no)
 /// una richiesta con asserzioni.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

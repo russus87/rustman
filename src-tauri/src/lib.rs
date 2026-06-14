@@ -7,8 +7,8 @@ use rustman_core::{
     model::{
         Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CoverageReport,
         DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf, Richiesta,
-        RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta, StatoRepo,
-        VoceStoria,
+        RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta, RunSummary,
+        StatoRepo, VoceStoria,
     },
     oauth, openapi, perf, report, storage, test, textdiff, vars,
 };
@@ -266,6 +266,27 @@ fn coverage_openapi(app: tauri::AppHandle, spec: String) -> Result<CoverageRepor
 #[tauri::command]
 fn genera_report(esiti: Vec<RisultatoRun>, titolo: String) -> String {
     report::genera_html(&esiti, &titolo)
+}
+
+/// Carica lo storico dei run (trend del pass-rate).
+#[tauri::command]
+fn carica_runs(app: tauri::AppHandle) -> Result<Vec<RunSummary>, String> {
+    let root = workspace(&app)?;
+    Ok(storage::carica_runs(&root))
+}
+
+/// Registra un run nello storico.
+#[tauri::command]
+fn registra_run(app: tauri::AppHandle, run: RunSummary) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::registra_run(&root, run).map_err(|e| e.to_string())
+}
+
+/// Svuota lo storico dei run.
+#[tauri::command]
+fn pulisci_runs(app: tauri::AppHandle) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::pulisci_runs(&root).map_err(|e| e.to_string())
 }
 
 // ========================= Comandi workspace =========================
@@ -625,6 +646,9 @@ pub fn run() {
             aggiorna_snapshot,
             coverage_openapi,
             genera_report,
+            carica_runs,
+            registra_run,
+            pulisci_runs,
             valuta_test,
             esegui_perf,
             esegui_perf_cfg,

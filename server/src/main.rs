@@ -15,7 +15,7 @@ use rustman_core::{
     codegen, curl, doc, git, http,
     model::{
         Asserzione, Auth, Catena, ConfigCartella, Environment, OpzioniPerf, Richiesta, Risposta,
-        RisultatoRun, VoceStoria,
+        RisultatoRun, RunSummary, VoceStoria,
     },
     oauth, openapi, perf, report, storage, test, textdiff, vars,
 };
@@ -400,6 +400,23 @@ async fn h_genera_report(Json(r): Json<ReportReq>) -> Json<String> {
     Json(report::genera_html(&r.esiti, &r.titolo))
 }
 
+async fn h_carica_runs(State(s): State<Stato>) -> Json<Vec<RunSummary>> {
+    Json(storage::carica_runs(&s.root()))
+}
+
+async fn h_registra_run(
+    State(s): State<Stato>,
+    Json(run): Json<RunSummary>,
+) -> Result<Json<()>, Errore> {
+    storage::registra_run(&s.root(), run).map_err(err)?;
+    Ok(Json(()))
+}
+
+async fn h_pulisci_runs(State(s): State<Stato>) -> Result<Json<()>, Errore> {
+    storage::pulisci_runs(&s.root()).map_err(err)?;
+    Ok(Json(()))
+}
+
 async fn h_percorso(State(s): State<Stato>) -> Json<String> {
     Json(s.root().to_string_lossy().to_string())
 }
@@ -680,6 +697,9 @@ async fn main() {
         .route("/api/aggiorna_snapshot", post(h_aggiorna_snapshot))
         .route("/api/coverage_openapi", post(h_coverage))
         .route("/api/genera_report", post(h_genera_report))
+        .route("/api/carica_runs", post(h_carica_runs))
+        .route("/api/registra_run", post(h_registra_run))
+        .route("/api/pulisci_runs", post(h_pulisci_runs))
         .route("/api/git_stato", post(h_git_stato))
         .route("/api/git_diff", post(h_git_diff))
         .route("/api/git_commit", post(h_git_commit))

@@ -14,7 +14,7 @@
 use crate::model::{
     Albero, Auth, Catena, CatenaSuDisco, Collezione, ConfigCartella, Environment,
     EnvironmentSuDisco, EsportaCollezione, Header, Nodo, NodoExport, Richiesta, RisultatoImport,
-    RisultatoTest, Variabile, VoceStoria,
+    RisultatoTest, RunSummary, Variabile, VoceStoria,
 };
 use crate::snapshot;
 use crate::har;
@@ -439,6 +439,40 @@ fn sostituisci_in_nodi(root: &Path, figli: &[Nodo], cerca: &str, con: &str) -> i
         }
     }
     Ok(n)
+}
+
+// ===================== Trend storico dei test ================================
+
+/// File (gitignorato) con lo storico dei run, per il trend del pass-rate.
+const FILE_RUNS: &str = ".rustman-runs.json";
+const MAX_RUNS: usize = 100;
+
+/// Carica lo storico dei run (il più recente per primo).
+pub fn carica_runs(root: &Path) -> Vec<RunSummary> {
+    fs::read_to_string(root.join(FILE_RUNS))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Registra un run in cima allo storico (troncato a `MAX_RUNS`).
+pub fn registra_run(root: &Path, run: RunSummary) -> io::Result<()> {
+    let mut storia = carica_runs(root);
+    storia.insert(0, run);
+    storia.truncate(MAX_RUNS);
+    assicura_gitignore(root, FILE_RUNS)?;
+    let testo = serde_json::to_string_pretty(&storia)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(root.join(FILE_RUNS), testo)
+}
+
+/// Svuota lo storico dei run.
+pub fn pulisci_runs(root: &Path) -> io::Result<()> {
+    let p = root.join(FILE_RUNS);
+    if p.exists() {
+        fs::remove_file(p)?;
+    }
+    Ok(())
 }
 
 // ===================== Snapshot / golden testing =============================
