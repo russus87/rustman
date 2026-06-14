@@ -456,6 +456,7 @@ fn costruisci_richiesta(
         post_script: String::new(),
         impostazioni: Default::default(),
         tags: Vec::new(),
+        descrizione: String::new(),
     }
 }
 

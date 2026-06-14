@@ -52,6 +52,13 @@ export const diffCollezioni = (vecchio, nuovo) => call("diff_collezioni", { vecc
 export const caricaConfigCartella = (dir) => call("carica_config_cartella", { dir });
 export const salvaConfigCartella = (dir, config) =>
   call("salva_config_cartella", { dir, config });
+export const variabiliCartella = (dir) => call("variabili_cartella", { dir });
+
+// ---- Workspace bundle / Cookie ----
+export const esportaWorkspace = () => call("esporta_workspace");
+export const importaWorkspace = (contenuto) => call("importa_workspace", { contenuto });
+export const listaCookie = () => call("lista_cookie");
+export const svuotaCookie = () => call("svuota_cookie");
 
 // ---- History ----
 export const caricaStoria = () => call("carica_storia");

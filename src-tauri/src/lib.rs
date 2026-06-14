@@ -5,10 +5,10 @@
 use rustman_core::{
     codegen, curl, doc, git, http,
     model::{
-        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CoverageReport,
-        DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf, Richiesta,
-        RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta, RunSummary,
-        SecurityAvviso, StatoRepo, VoceStoria,
+        Albero, Asserzione, Auth, Catena, CatenaSuDisco, Commit, ConfigCartella, CookieInfo,
+        CoverageReport, DriftReport, Environment, EnvironmentSuDisco, FileModificato, OpzioniPerf,
+        Richiesta, RigaDiff, RisultatoImport, RisultatoPerf, RisultatoRun, RisultatoTest, Risposta,
+        RunSummary, SecurityAvviso, StatoRepo, Variabile, VoceStoria,
     },
     oauth, openapi, perf, report, security, storage, test, textdiff, vars,
 };
@@ -202,6 +202,39 @@ fn salva_config_cartella(
 ) -> Result<(), String> {
     let root = workspace(&app)?;
     storage::salva_config_cartella(&root, &dir, &config).map_err(|e| e.to_string())
+}
+
+/// Variabili di collezione/cartella ereditate dagli antenati di `dir`.
+#[tauri::command]
+fn variabili_cartella(app: tauri::AppHandle, dir: String) -> Result<Vec<Variabile>, String> {
+    let root = workspace(&app)?;
+    Ok(storage::variabili_cartella(&root, &dir))
+}
+
+/// Esporta l'intero workspace (collezioni + ambienti) in un bundle JSON.
+#[tauri::command]
+fn esporta_workspace(app: tauri::AppHandle) -> Result<String, String> {
+    let root = workspace(&app)?;
+    storage::esporta_workspace(&root).map_err(|e| e.to_string())
+}
+
+/// Importa un bundle di workspace (collezioni + ambienti).
+#[tauri::command]
+fn importa_workspace(app: tauri::AppHandle, contenuto: String) -> Result<(), String> {
+    let root = workspace(&app)?;
+    storage::importa_workspace(&root, &contenuto).map_err(|e| e.to_string())
+}
+
+/// Elenco dei cookie correnti (cookie jar di sessione).
+#[tauri::command]
+fn lista_cookie() -> Vec<CookieInfo> {
+    http::lista_cookie()
+}
+
+/// Svuota il cookie jar di sessione.
+#[tauri::command]
+fn svuota_cookie() {
+    http::svuota_cookie()
 }
 
 // ====================== Comandi test e performance ======================
@@ -655,6 +688,11 @@ pub fn run() {
             diff_collezioni,
             carica_config_cartella,
             salva_config_cartella,
+            variabili_cartella,
+            esporta_workspace,
+            importa_workspace,
+            lista_cookie,
+            svuota_cookie,
             valuta_snapshot,
             aggiorna_snapshot,
             coverage_openapi,

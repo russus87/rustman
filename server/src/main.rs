@@ -14,8 +14,8 @@ use axum::{
 use rustman_core::{
     codegen, curl, doc, git, http,
     model::{
-        Asserzione, Auth, Catena, ConfigCartella, Environment, OpzioniPerf, Richiesta, Risposta,
-        RisultatoRun, RunSummary, VoceStoria,
+        Asserzione, Auth, Catena, ConfigCartella, CookieInfo, Environment, OpzioniPerf, Richiesta,
+        Risposta, RisultatoRun, RunSummary, Variabile, VoceStoria,
     },
     oauth, openapi, perf, report, storage, test, textdiff, vars,
 };
@@ -370,6 +370,31 @@ async fn h_salva_config_cartella(
     Ok(Json(()))
 }
 
+async fn h_variabili_cartella(State(s): State<Stato>, Json(r): Json<DirReq>) -> Json<Vec<Variabile>> {
+    Json(storage::variabili_cartella(&s.root(), &r.dir))
+}
+
+async fn h_esporta_workspace(State(s): State<Stato>) -> Result<Json<String>, Errore> {
+    Ok(Json(storage::esporta_workspace(&s.root()).map_err(err)?))
+}
+
+async fn h_importa_workspace(
+    State(s): State<Stato>,
+    Json(r): Json<ContenutoReq>,
+) -> Result<Json<()>, Errore> {
+    storage::importa_workspace(&s.root(), &r.contenuto).map_err(err)?;
+    Ok(Json(()))
+}
+
+async fn h_lista_cookie() -> Json<Vec<CookieInfo>> {
+    Json(http::lista_cookie())
+}
+
+async fn h_svuota_cookie() -> Json<()> {
+    http::svuota_cookie();
+    Json(())
+}
+
 async fn h_perf_cfg(
     State(_s): State<Stato>,
     Json(r): Json<PerfCfgReq>,
@@ -706,6 +731,11 @@ async fn main() {
         .route("/api/diff_collezioni", post(h_diff_collezioni))
         .route("/api/carica_config_cartella", post(h_carica_config_cartella))
         .route("/api/salva_config_cartella", post(h_salva_config_cartella))
+        .route("/api/variabili_cartella", post(h_variabili_cartella))
+        .route("/api/esporta_workspace", post(h_esporta_workspace))
+        .route("/api/importa_workspace", post(h_importa_workspace))
+        .route("/api/lista_cookie", post(h_lista_cookie))
+        .route("/api/svuota_cookie", post(h_svuota_cookie))
         .route("/api/esegui_perf_cfg", post(h_perf_cfg))
         .route("/api/valuta_snapshot", post(h_valuta_snapshot))
         .route("/api/aggiorna_snapshot", post(h_aggiorna_snapshot))

@@ -86,6 +86,9 @@ pub struct Richiesta {
     /// Etichette per organizzare/filtrare e per le suite (`--tag` nella CLI).
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Descrizione in Markdown (mostrata nella doc generata).
+    #[serde(default)]
+    pub descrizione: String,
 }
 
 /// Impostazioni di rete per-richiesta.
@@ -221,6 +224,9 @@ pub struct ConfigCartella {
     pub headers: Vec<Header>,
     #[serde(default)]
     pub auth: Auth,
+    /// Variabili di collezione/cartella (priorità inferiore all'ambiente attivo).
+    #[serde(default)]
+    pub variabili: Vec<Variabile>,
 }
 
 /// Una collezione = una cartella di primo livello, con i suoi figli (cartelle/richieste).
@@ -358,6 +364,15 @@ pub struct RisultatoRun {
     pub errore: String,
     #[serde(default)]
     pub tests: Vec<RisultatoTest>,
+}
+
+/// Un cookie visto in una risposta (per il cookie inspector).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CookieInfo {
+    pub dominio: String,
+    pub nome: String,
+    pub valore: String,
+    pub attributi: String,
 }
 
 /// Un avviso del security scan sulla risposta.

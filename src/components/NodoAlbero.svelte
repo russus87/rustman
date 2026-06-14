@@ -2,7 +2,7 @@
   // Nodo dell'albero delle collezioni: cartella (ricorsiva) o richiesta.
   import Self from "./NodoAlbero.svelte";
 
-  let { nodo, livello = 0, attivo, azioni } = $props();
+  let { nodo, livello = 0, attivo, azioni, pinnati = [] } = $props();
 
   let aperto = $state(true);
   // Modalità input inline: null | "req" | "folder" | "rinomina".
@@ -70,7 +70,7 @@
       </div>
     {/if}
     {#each nodo.figli as figlio}
-      <Self nodo={figlio} livello={livello + 1} {attivo} {azioni} />
+      <Self nodo={figlio} livello={livello + 1} {attivo} {azioni} {pinnati} />
     {/each}
   {/if}
 {:else}
@@ -78,6 +78,7 @@
     onclick={() => azioni.onApri(nodo.file, nodo.richiesta)}>
     <span class="m {classeMetodo(nodo.richiesta.metodo)}">{nodo.richiesta.metodo}</span>
     <span class="rname">{nodo.richiesta.nome || "(senza nome)"}</span>
+    <span class="pin" class:on={pinnati.includes(nodo.file)} title="Preferito" onclick={(e) => { e.stopPropagation(); azioni.onPin(nodo.file); }}>★</span>
     <span class="del" title="Elimina" onclick={(e) => { e.stopPropagation(); azioni.onEliminaRichiesta(nodo.file); }}>✕</span>
   </div>
 {/if}
@@ -113,7 +114,6 @@
     color: var(--red);
   }
   .del {
-    margin-left: auto;
     color: var(--txt-faint);
     opacity: 0;
     padding: 0 4px;
@@ -123,6 +123,17 @@
   .req:hover .del {
     opacity: 1;
   }
+  .pin {
+    margin-left: auto;
+    color: var(--txt-faint);
+    opacity: 0;
+    padding: 0 3px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .req:hover .pin { opacity: .6; }
+  .pin:hover { opacity: 1 !important; color: var(--orange); }
+  .pin.on { opacity: 1; color: var(--orange); }
   .del:hover {
     color: var(--red);
     background: var(--panel-3);

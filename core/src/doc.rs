@@ -60,6 +60,10 @@ fn rendi_richiesta(r: &Richiesta, out: &mut String) {
         esc(&r.url)
     ));
 
+    if !r.descrizione.is_empty() {
+        out.push_str(&format!("<p class=\"desc\">{}</p>", esc(&r.descrizione)));
+    }
+
     rendi_tabella(out, "Parametri", &r.params);
     rendi_tabella(out, "Header", &r.headers);
     rendi_auth(out, &r.auth);
@@ -153,6 +157,7 @@ td.k{color:#dea584;font-family:monospace;width:30%}\
 pre{background:#0b0e14;border:1px solid #2a3340;border-radius:8px;padding:12px;overflow:auto;font-size:.85rem}\
 .tests{list-style:none;font-family:monospace;font-size:.85rem}.tests li{padding:2px 0;color:#9aa7b8}\
 .auth{font-size:.9rem;color:#9aa7b8}.vuoto{color:#6e7b8a}\
+.desc{color:#c9cfda;font-size:.92rem;margin:4px 0 8px;white-space:pre-wrap}\
 @media(max-width:720px){body{grid-template-columns:1fr}nav{position:static;max-height:none}}";
 
 #[cfg(test)]
@@ -177,6 +182,7 @@ mod tests {
             post_script: String::new(),
             impostazioni: Default::default(),
         tags: Vec::new(),
+        descrizione: String::new(),
         };
         let albero = vec![Collezione {
             nome: "Auth API".into(),

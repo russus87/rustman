@@ -6,8 +6,14 @@
   let sez = $state("jwt"); // jwt | base64 | url | ts | hmac | import | envdiff
   const sezioni = [
     ["jwt", "JWT"], ["base64", "Base64"], ["url", "URL"], ["ts", "Timestamp"],
-    ["hmac", "HMAC"], ["import", "Importa"], ["envdiff", "Diff ambienti"],
+    ["hmac", "HMAC"], ["import", "Importa"], ["envdiff", "Diff ambienti"], ["cookie", "Cookie"],
   ];
+
+  // ---- Cookie inspector ----
+  let cookie = $state([]);
+  async function caricaCookie() { try { cookie = await api.listaCookie(); } catch { cookie = []; } }
+  async function svuotaCookie() { try { await api.svuotaCookie(); cookie = []; } catch {} }
+  $effect(() => { if (sez === "cookie") caricaCookie(); });
 
   // ---- JWT ----
   let jwt = $state("");
@@ -165,6 +171,21 @@
             <tr class={d.stato}><td class="k">{d.k}</td><td>{d.a ?? "—"}</td><td>{d.b ?? "—"}</td></tr>
           {/each}
         </tbody></table>
+      {/if}
+
+    {:else if sez === "cookie"}
+      <div class="row" style="align-items:center">
+        <button class="btn" style="margin-top:0" onclick={caricaCookie}>Aggiorna</button>
+        <button class="btn" style="margin-top:0;background:linear-gradient(145deg,#f85149,#c73a33)" onclick={svuotaCookie}>Svuota jar</button>
+      </div>
+      {#if cookie.length}
+        <table class="dt"><thead><tr><th>Dominio</th><th>Nome</th><th>Valore</th></tr></thead><tbody>
+          {#each cookie as c}
+            <tr><td class="k">{c.dominio}</td><td>{c.nome}</td><td title={c.valore}>{c.valore}</td></tr>
+          {/each}
+        </tbody></table>
+      {:else}
+        <div class="info">Nessun cookie. Vengono raccolti dai <code>Set-Cookie</code> delle risposte.</div>
       {/if}
     {/if}
   </div>

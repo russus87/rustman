@@ -1,15 +1,52 @@
 //! Client HTTP: invia una `Richiesta` e misura il tempo di risposta.
 
-use crate::model::{Header, Richiesta, Risposta};
-use std::sync::{Arc, OnceLock};
+use crate::model::{CookieInfo, Header, Richiesta, Risposta};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-/// Cookie jar condiviso per la durata del processo: i `Set-Cookie` ricevuti
-/// vengono rimandati automaticamente alle richieste successive (sessioni).
+/// Cookie jar condiviso (resettabile) per la durata del processo.
+fn jar_globale() -> &'static Mutex<Arc<reqwest::cookie::Jar>> {
+    static JAR: OnceLock<Mutex<Arc<reqwest::cookie::Jar>>> = OnceLock::new();
+    JAR.get_or_init(|| Mutex::new(Arc::new(reqwest::cookie::Jar::default())))
+}
+
+/// Cookie jar corrente: i `Set-Cookie` ricevuti vengono rimandati alle richieste
+/// successive (sessioni).
 fn cookie_jar() -> Arc<reqwest::cookie::Jar> {
-    static JAR: OnceLock<Arc<reqwest::cookie::Jar>> = OnceLock::new();
-    JAR.get_or_init(|| Arc::new(reqwest::cookie::Jar::default()))
-        .clone()
+    jar_globale().lock().unwrap().clone()
+}
+
+/// Archivio leggibile dei cookie visti (per l'inspector).
+fn cookies_store() -> &'static Mutex<Vec<CookieInfo>> {
+    static C: OnceLock<Mutex<Vec<CookieInfo>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Restituisce i cookie correnti (visti nelle risposte).
+pub fn lista_cookie() -> Vec<CookieInfo> {
+    cookies_store().lock().unwrap().clone()
+}
+
+/// Svuota il cookie jar e l'archivio dei cookie.
+pub fn svuota_cookie() {
+    *jar_globale().lock().unwrap() = Arc::new(reqwest::cookie::Jar::default());
+    cookies_store().lock().unwrap().clear();
+}
+
+/// Registra (o aggiorna) un cookie dall'header `Set-Cookie`.
+fn registra_cookie(dominio: &str, set_cookie: &str) {
+    let mut parti = set_cookie.splitn(2, ';');
+    let nome_val = parti.next().unwrap_or("").trim();
+    let attributi = parti.next().unwrap_or("").trim().to_string();
+    let (nome, valore) = nome_val.split_once('=').unwrap_or((nome_val, ""));
+    let mut store = cookies_store().lock().unwrap();
+    store.retain(|c| !(c.dominio == dominio && c.nome == nome));
+    store.push(CookieInfo {
+        dominio: dominio.to_string(),
+        nome: nome.to_string(),
+        valore: valore.to_string(),
+        attributi,
+    });
 }
 
 /// Costruisce il client applicando le impostazioni della richiesta
@@ -68,6 +105,22 @@ pub async fn invia(richiesta: &Richiesta) -> Result<Risposta, ErroreHttp> {
         break resp;
     };
     let status = resp.status();
+
+    // Registra i cookie ricevuti (per l'inspector).
+    let dominio = richiesta
+        .url
+        .split_once("://")
+        .map(|(_, r)| r)
+        .unwrap_or(&richiesta.url)
+        .split(['/', '?'])
+        .next()
+        .unwrap_or("")
+        .to_string();
+    for v in resp.headers().get_all("set-cookie").iter() {
+        if let Ok(s) = v.to_str() {
+            registra_cookie(&dominio, s);
+        }
+    }
 
     // Copia le intestazioni della risposta nel nostro modello.
     let headers = resp

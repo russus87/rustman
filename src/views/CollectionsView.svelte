@@ -4,6 +4,7 @@
 
   let {
     albero,
+    percorsoWs = "",
     attivo,
     onApri,
     onNuovaCollezione,
@@ -22,22 +23,49 @@
     onConfigCartella,
     onCoverage,
     onEseguiBatch,
+    onEsportaWs,
+    onImportaWs,
   } = $props();
 
   let nuovaColl = $state({ attiva: false, nome: "" });
   let cerca = $state("");
-  // Filtri salvati ("smart folders"), persistiti in localStorage.
-  let filtri = $state(JSON.parse(localStorage.getItem("rustman_filtri") || "[]"));
+
+  // Chiavi localStorage per-workspace (filtri salvati e preferiti).
+  const kFiltri = $derived(`rustman_filtri:${percorsoWs}`);
+  const kPin = $derived(`rustman_pin:${percorsoWs}`);
+  let filtri = $state([]);
+  let pinnati = $state([]);
+  $effect(() => {
+    // Ricarica quando cambia il workspace.
+    filtri = JSON.parse(localStorage.getItem(kFiltri) || "[]");
+    pinnati = JSON.parse(localStorage.getItem(kPin) || "[]");
+  });
   function salvaFiltro() {
     const q = cerca.trim();
     if (!q || filtri.includes(q)) return;
     filtri = [...filtri, q];
-    localStorage.setItem("rustman_filtri", JSON.stringify(filtri));
+    localStorage.setItem(kFiltri, JSON.stringify(filtri));
   }
   function rimuoviFiltro(f) {
     filtri = filtri.filter((x) => x !== f);
-    localStorage.setItem("rustman_filtri", JSON.stringify(filtri));
+    localStorage.setItem(kFiltri, JSON.stringify(filtri));
   }
+  // Preferiti: pin/unpin di una richiesta (per percorso file).
+  function togglePin(file) {
+    pinnati = pinnati.includes(file) ? pinnati.filter((x) => x !== file) : [...pinnati, file];
+    localStorage.setItem(kPin, JSON.stringify(pinnati));
+  }
+  // Risolve i file pinnati in {file, richiesta} dall'albero.
+  function trovaRichiesta(figli, file) {
+    for (const n of figli) {
+      if (n.tipo === "cartella") { const r = trovaRichiesta(n.figli, file); if (r) return r; }
+      else if (n.file === file) return n;
+    }
+    return null;
+  }
+  const preferiti = $derived.by(() =>
+    pinnati.map((f) => { for (const c of albero) { const r = trovaRichiesta(c.figli, f); if (r) return r; } return null; }).filter(Boolean)
+  );
 
   // True se una richiesta combacia col testo cercato (nome/url/metodo/tag).
   function combacia(r, q) {
@@ -73,7 +101,13 @@
   let driftInput;
   let covInput;
   let collDiffInput;
+  let wsInput;
 
+  async function suWsFile(e) {
+    const f = e.target.files?.[0];
+    if (f) await onImportaWs?.(await f.text());
+    e.target.value = "";
+  }
   async function suCollDiffFiles(e) {
     const files = [...(e.target.files || [])];
     if (files.length === 2) {
@@ -115,6 +149,7 @@
     onEsporta,
     onConfigCartella,
     onEseguiBatch,
+    onPin: togglePin,
   };
 
   function confermaColl() {
@@ -161,7 +196,14 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v18M15 3v18M4 8h5M15 8h5M4 16h5M15 16h5"/></svg>
     </span>
     <input type="file" accept=".json,.yaml,.yml" style="display:none" bind:this={covInput} onchange={suCovFile} />
+    <span class="side-add" title="Esporta tutto il workspace (bundle)" onclick={() => onEsportaWs?.()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+    </span>
+    <span class="side-add" title="Importa un bundle di workspace" onclick={() => wsInput.click()}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8v13h18V8M12 3v12M8 11l4 4 4-4"/></svg>
+    </span>
     <input type="file" accept=".json" multiple style="display:none" bind:this={collDiffInput} onchange={suCollDiffFiles} />
+    <input type="file" accept=".json" style="display:none" bind:this={wsInput} onchange={suWsFile} />
   </div>
 </div>
 
@@ -211,8 +253,15 @@
       <div>Usa <b>+</b> qui sopra per crearne una.</div>
     </div>
   {/if}
+  {#if preferiti.length && !cerca.trim()}
+    <div style="padding:6px 14px 2px;font-size:10.5px;font-weight:600;letter-spacing:.6px;color:var(--txt-faint)">★ PREFERITI</div>
+    {#each preferiti as n}
+      <NodoAlbero nodo={n} livello={0} {attivo} {azioni} {pinnati} />
+    {/each}
+    <div style="height:1px;background:var(--border);margin:6px 8px"></div>
+  {/if}
   {#each alberoFiltrato as c}
-    <NodoAlbero nodo={{ tipo: "cartella", nome: c.nome, dir: c.dir, figli: c.figli }} livello={0} {attivo} {azioni} />
+    <NodoAlbero nodo={{ tipo: "cartella", nome: c.nome, dir: c.dir, figli: c.figli }} livello={0} {attivo} {azioni} {pinnati} />
   {/each}
   {#if cerca.trim() && alberoFiltrato.length === 0}
     <div class="placeholder" style="height:auto;padding:16px 8px"><div>Nessun risultato.</div></div>

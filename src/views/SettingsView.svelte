@@ -1,6 +1,7 @@
 <script>
   // Vista "Settings": preferenze dell'app (autosalvataggio, tema, accento).
   import { settings, salvaSettings, applicaTema } from "../lib/settings.svelte.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   function aggiorna() {
     salvaSettings();
@@ -15,10 +16,27 @@
 <div class="set-head">SETTINGS</div>
 <div class="set-body">
   <div class="campo">
-    <span>Tema</span>
+    <span>{t("Lingua")}</span>
+    <select bind:value={settings.lingua} onchange={aggiorna}>
+      <option value="it">Italiano</option>
+      <option value="en">English</option>
+    </select>
+  </div>
+  <div class="campo">
+    <span>{t("Tema")}</span>
     <select bind:value={settings.tema} onchange={aggiornaTema}>
-      <option value="scuro">Scuro</option>
-      <option value="chiaro">Chiaro</option>
+      <option value="scuro">{t("Scuro")}</option>
+      <option value="chiaro">{t("Chiaro")}</option>
+      <option value="sistema">{t("Sistema")}</option>
+    </select>
+  </div>
+  <div class="campo">
+    <span>{t("Dimensione")}</span>
+    <select bind:value={settings.scala} onchange={aggiornaTema}>
+      <option value={0.9}>Piccola</option>
+      <option value={1}>Normale</option>
+      <option value={1.1}>Grande</option>
+      <option value={1.25}>Molto grande</option>
     </select>
   </div>
   <div class="campo">

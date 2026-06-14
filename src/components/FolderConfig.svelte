@@ -5,6 +5,7 @@
 
   let cfg = $state($state.snapshot(config));
   if (!Array.isArray(cfg.headers)) cfg.headers = [];
+  if (!Array.isArray(cfg.variabili)) cfg.variabili = [];
   if (!cfg.auth) cfg.auth = { tipo: "none", token: "", utente: "", password: "", oauth2: null };
 
   function aggiungiHeader() {
@@ -12,6 +13,12 @@
   }
   function rimuoviHeader(i) {
     cfg.headers.splice(i, 1);
+  }
+  function aggiungiVar() {
+    cfg.variabili.push({ chiave: "", valore: "", segreto: false });
+  }
+  function rimuoviVar(i) {
+    cfg.variabili.splice(i, 1);
   }
   async function salva() {
     await onSalva(dir, $state.snapshot(cfg));
@@ -39,6 +46,20 @@
     </tbody>
   </table>
   <button class="fc-mini" onclick={aggiungiHeader}>+ Header</button>
+
+  <h4>Variabili di collezione/cartella</h4>
+  <table class="fc-kv">
+    <tbody>
+      {#each cfg.variabili as v, i}
+        <tr>
+          <td><input class="fc-inp" placeholder="chiave" bind:value={v.chiave} /></td>
+          <td><input class="fc-inp" placeholder="valore" bind:value={v.valore} /></td>
+          <td><span class="fc-rm" onclick={() => rimuoviVar(i)}>✕</span></td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+  <button class="fc-mini" onclick={aggiungiVar}>+ Variabile</button>
 
   <h4>Auth ereditata</h4>
   <div class="fc-row">

@@ -39,6 +39,10 @@
   let ambienteAttivo = $state(null);
   let storia = $state([]);
   let runs = $state([]);
+  let percorsoWs = $state(""); // path del workspace (per preferiti/filtri salvati)
+  async function ricaricaPercorso() {
+    try { percorsoWs = await api.percorsoWorkspace(); } catch { percorsoWs = ""; }
+  }
 
   // Nome dell'ambiente attivo (per la cronologia).
   const nomeAmbienteAttivo = $derived.by(() => {
@@ -84,7 +88,7 @@
   }
   onMount(async () => {
     applicaTema();
-    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns()]);
+    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns(), ricaricaPercorso()]);
   });
 
   // ---------------- History / replay ----------------
@@ -178,6 +182,19 @@
     if (!t.richiesta.tests) t.richiesta.tests = [];
     t.richiesta.tests.push({ tipo: "json", operatore: "==", campo: path, atteso: value, attivo: true });
     logga("ok", `Asserzione aggiunta: json '${path}' == ${value}`);
+  }
+
+  // Diff delle modifiche non salvate del tab attivo (editor vs file salvato).
+  async function diffNonSalvate() {
+    const t = tabAttivo;
+    if (!t || t.tipo !== "request") return;
+    const attuale = JSON.stringify($state.snapshot(t.richiesta), null, 2);
+    let salvato = attuale;
+    try { salvato = JSON.stringify(JSON.parse(t.salvato), null, 2); } catch { salvato = ""; }
+    let righe = [];
+    try { righe = await api.diffTesti(salvato, attuale); } catch (e) { console.error(e); }
+    const tab = { id: prossimoId++, tipo: "diff", file: null, titolo: `Modifiche · ${t.richiesta.nome || "richiesta"}`, righe };
+    tabs.push(tab); tabAttivoId = tab.id;
   }
 
   // Confronta le risposte di due voci di cronologia in un tab diff.
@@ -332,6 +349,27 @@
     } catch (e) { logga("errore", `Drift fallito: ${e}`); }
   }
 
+  // Esporta l'intero workspace (collezioni + ambienti) come bundle.
+  async function esportaWs() {
+    try {
+      const bundle = await api.esportaWorkspace();
+      const blob = new Blob([bundle], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "rustman-workspace.json";
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      logga("ok", "Workspace esportato");
+    } catch (e) { logga("errore", `Export workspace fallito: ${e}`); }
+  }
+  async function importaWs(contenuto) {
+    try {
+      await api.importaWorkspace(contenuto);
+      await Promise.all([ricaricaAlbero(), ricaricaEnvironments()]);
+      segnaleGit++;
+      logga("ok", "Workspace importato");
+    } catch (e) { logga("errore", `Import workspace fallito: ${e}`); }
+  }
+
   // Esporta le collezioni in uno spec OpenAPI e lo scarica.
   async function esportaOpenapi() {
     try {
@@ -402,8 +440,15 @@
     if (!t || t.tipo !== "request") return;
     t.inCorso = true; t.errore = null; t.risultatiTest = [];
     try {
-      // Le variabili partono dall'ambiente attivo; gli script possono modificarle.
-      const vars = { ...(variabiliAttive || {}) };
+      // Variabili: collezione/cartella (priorità minore) < ambiente attivo.
+      let vars = { ...(variabiliAttive || {}) };
+      if (t.dir) {
+        try {
+          const cv = await api.variabiliCartella(t.dir);
+          const m = {}; for (const v of cv) if (v.chiave) m[v.chiave] = v.valore;
+          vars = { ...m, ...vars };
+        } catch (e) { console.error(e); }
+      }
       // Copia di lavoro: pre/post-script non alterano la richiesta salvata.
       const req = $state.snapshot(t.richiesta);
       const pre = eseguiPre(req.pre_script, { req, vars });
@@ -574,7 +619,7 @@
   // ---------------- Workspace ----------------
   async function cambiaWorkspace() {
     tabs = []; tabAttivoId = null; ambienteAttivo = null;
-    await Promise.all([ricaricaAlbero(), ricaricaEnvironments()]);
+    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaPercorso()]);
     segnaleGit++;
     vista = "collezioni";
     logga("info", "Workspace cambiato");
@@ -647,6 +692,7 @@
     out.push({ tag: "🔌", label: "Nuova connessione SSE", azione: () => nuovaConnessione("sse") });
     out.push({ tag: "🧰", label: "Apri Strumenti (JWT, Base64, HMAC, import…)", azione: apriStrumenti });
     out.push({ tag: "◆", label: "Nuova query GraphQL", azione: nuovaGraphQL });
+    if (tabAttivo?.tipo === "request") out.push({ tag: "±", label: "Diff modifiche non salvate", azione: diffNonSalvate });
     out.push({ tag: "⌨", label: "Scorciatoie da tastiera", azione: () => (cheatAperto = true) });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
     // Confronto affiancato: diff della risposta attiva con un altro tab.
@@ -680,6 +726,7 @@
       {#if vista === "collezioni"}
         <CollectionsView
           {albero}
+          {percorsoWs}
           attivo={tabAttivo?.file ?? null}
           onApri={apriRichiesta}
           onNuovaCollezione={nuovaCollezione}
@@ -698,6 +745,8 @@
           onConfigCartella={apriConfigCartella}
           onCoverage={coverageDaSpec}
           onEseguiBatch={eseguiBatch}
+          onEsportaWs={esportaWs}
+          onImportaWs={importaWs}
         />
       {:else if vista === "run"}
         <RunView {albero} onEsegui={eseguiRun} />

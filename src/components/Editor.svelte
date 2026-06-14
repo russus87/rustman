@@ -19,7 +19,7 @@
   let lingCodice = $state("curl");
 
   let tab = $state("Body");
-  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script"];
+  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Note"];
   const metodi = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   // Anteprima dei {{segnaposto}} nell'URL: variabili d'ambiente risolte,
@@ -144,6 +144,7 @@
       richiesta.impostazioni = { timeout_ms: 0, segui_redirect: true, verifica_tls: true, retry_429: 0 };
     }
     if (richiesta && !Array.isArray(richiesta.tags)) richiesta.tags = [];
+    if (richiesta && richiesta.descrizione == null) richiesta.descrizione = "";
   });
 
   // OAuth2: chiede il token al server di autorizzazione e lo salva nella richiesta.
@@ -391,6 +392,12 @@
         <div class="auth-row"><label><input type="checkbox" bind:checked={richiesta.impostazioni.verifica_tls} /> Verifica il certificato TLS</label></div>
         <div class="script-aiuto" style="border:none;padding:8px 0 0">I cookie (Set-Cookie) sono gestiti automaticamente come sessione tra le richieste.</div>
       {/if}
+    </div>
+  {:else if tab === "Note"}
+    <div class="script-aiuto" style="border:none">Descrizione in Markdown — appare nella documentazione generata.</div>
+    <div class="code-wrap">
+      <textarea class="code-area" bind:value={richiesta.descrizione} spellcheck="false"
+        placeholder={"## Cosa fa\nDescrivi questa richiesta…"}></textarea>
     </div>
   {:else if tab === "Tests"}
     <div class="code-wrap" style="padding:12px 14px">

@@ -186,6 +186,7 @@ pub fn crea_richiesta(root: &Path, dir: &str, nome: &str) -> io::Result<String> 
         post_script: String::new(),
         impostazioni: Default::default(),
         tags: Vec::new(),
+        descrizione: String::new(),
     };
     salva_richiesta(root, dir, None, &richiesta)
 }
@@ -643,6 +644,27 @@ pub fn salva_config_cartella(root: &Path, dir: &str, cfg: &ConfigCartella) -> io
     fs::write(root.join(dir).join(FILE_CARTELLA), testo)
 }
 
+/// Raccoglie le variabili di collezione/cartella ereditate dagli antenati di
+/// `dir` (le cartelle più interne sovrascrivono quelle esterne).
+pub fn variabili_cartella(root: &Path, dir: &str) -> Vec<Variabile> {
+    let mut mappa: Vec<(String, Variabile)> = Vec::new();
+    let mut prefisso = String::new();
+    for parte in dir.split('/').filter(|s| !s.is_empty()) {
+        if !prefisso.is_empty() {
+            prefisso.push('/');
+        }
+        prefisso.push_str(parte);
+        for v in carica_config_cartella(root, &prefisso).variabili {
+            if v.chiave.is_empty() {
+                continue;
+            }
+            mappa.retain(|(k, _)| k != &v.chiave);
+            mappa.push((v.chiave.clone(), v));
+        }
+    }
+    mappa.into_iter().map(|(_, v)| v).collect()
+}
+
 /// Applica alla richiesta gli header e l'auth ereditati dalle cartelle antenate
 /// (`dir` è la cartella che contiene la richiesta). Gli header propri della
 /// richiesta hanno la precedenza; l'auth ereditata si usa solo se quella della
@@ -821,6 +843,49 @@ fn salva_collezione_con_env(
     Ok(RisultatoImport::Collezione { dir, environment })
 }
 
+/// Esporta l'intero workspace (tutte le collezioni + ambienti) in un bundle JSON.
+pub fn esporta_workspace(root: &Path) -> io::Result<String> {
+    let albero = carica_albero(root)?;
+    let mut collezioni = Vec::new();
+    for c in &albero {
+        let s = esporta_collezione(root, &c.dir)?;
+        let v: serde_json::Value =
+            serde_json::from_str(&s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        collezioni.push(v);
+    }
+    let environments: Vec<Environment> = carica_environments(root)?
+        .into_iter()
+        .map(|e| e.environment)
+        .collect();
+    let bundle = serde_json::json!({
+        "rustman_workspace": 1,
+        "collezioni": collezioni,
+        "environments": environments,
+    });
+    serde_json::to_string_pretty(&bundle).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+}
+
+/// Importa un bundle di workspace: collezioni e ambienti.
+pub fn importa_workspace(root: &Path, contenuto: &str) -> io::Result<()> {
+    let v: serde_json::Value =
+        serde_json::from_str(contenuto).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    if let Some(colls) = v.get("collezioni").and_then(|x| x.as_array()) {
+        for c in colls {
+            if let Ok(esporta) = serde_json::from_value::<EsportaCollezione>(c.clone()) {
+                importa_export(root, &esporta)?;
+            }
+        }
+    }
+    if let Some(envs) = v.get("environments").and_then(|x| x.as_array()) {
+        for e in envs {
+            if let Ok(env) = serde_json::from_value::<Environment>(e.clone()) {
+                salva_environment(root, None, &env)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Importa una collezione dal formato nativo Rustman; restituisce la dir creata.
 pub fn importa_collezione(root: &Path, contenuto: &str) -> io::Result<String> {
     let esporta: EsportaCollezione = serde_json::from_str(contenuto)
@@ -888,6 +953,7 @@ mod tests {
             post_script: String::new(),
             impostazioni: Default::default(),
         tags: Vec::new(),
+        descrizione: String::new(),
         }
     }
 
@@ -1030,6 +1096,7 @@ mod tests {
         let cfg = ConfigCartella {
             headers: vec![Header { chiave: "X-App".into(), valore: "rustman".into(), attivo: true }],
             auth: Auth { tipo: "bearer".into(), token: "T".into(), ..Auth::default() },
+            variabili: vec![],
         };
         salva_config_cartella(root, "api", &cfg).unwrap();
 

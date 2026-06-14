@@ -1,9 +1,16 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.30.0";
+export const VERSIONE = "0.31.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.31.0",
+    voci: [
+      "Produttività: cookie inspector, variabili di collezione, response come tabella, dirty diff, richieste preferite, filtri per-workspace.",
+      "Polish: tema 'sistema' + dimensione font, descrizioni Markdown (tab Note), export/import dell'intero workspace, i18n IT/EN (base).",
+    ],
+  },
   {
     versione: "0.30.0",
     voci: [

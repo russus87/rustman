@@ -2,7 +2,7 @@
 // Funziona sia su desktop (Tauri) sia su web.
 
 const CHIAVE = "rustman_settings";
-const DEFAULT = { autosave: false, autosaveMs: 1000, tema: "scuro", accento: "#7c5cff" };
+const DEFAULT = { autosave: false, autosaveMs: 1000, tema: "scuro", accento: "#7c5cff", scala: 1, lingua: "it" };
 
 function carica() {
   try {
@@ -24,14 +24,21 @@ export function salvaSettings() {
       autosaveMs: settings.autosaveMs,
       tema: settings.tema,
       accento: settings.accento,
+      scala: settings.scala,
+      lingua: settings.lingua,
     }),
   );
 }
 
-// Applica tema e accento al documento (variabili CSS).
+// Applica tema, accento e scala (zoom) al documento.
 export function applicaTema() {
   const root = document.documentElement;
-  root.dataset.tema = settings.tema === "chiaro" ? "light" : "dark";
+  let chiaro = settings.tema === "chiaro";
+  if (settings.tema === "sistema") {
+    chiaro = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+  }
+  root.dataset.tema = chiaro ? "light" : "dark";
   root.style.setProperty("--accent", settings.accento);
   root.style.setProperty("--accent-2", settings.accento);
+  root.style.zoom = String(settings.scala || 1);
 }

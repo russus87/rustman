@@ -17,6 +17,34 @@
     try { return estrai(JSON.parse(risposta.body), "", []).slice(0, 300); } catch { return []; }
   });
 
+  // Vista tabella: se il body è un array di oggetti.
+  let tabella = $state(false);
+  let ordCol = $state(null);
+  let ordAsc = $state(true);
+  const datiTab = $derived.by(() => {
+    if (!risposta) return null;
+    try {
+      const arr = JSON.parse(risposta.body);
+      if (!Array.isArray(arr) || arr.length === 0 || typeof arr[0] !== "object" || arr[0] === null) return null;
+      const colonne = [...new Set(arr.flatMap((o) => Object.keys(o || {})))].slice(0, 20);
+      let righe = arr.slice(0, 500);
+      if (ordCol) {
+        righe = [...righe].sort((a, b) => {
+          const x = a?.[ordCol], y = b?.[ordCol];
+          return (x > y ? 1 : x < y ? -1 : 0) * (ordAsc ? 1 : -1);
+        });
+      }
+      return { colonne, righe };
+    } catch { return null; }
+  });
+  function ordina(c) {
+    if (ordCol === c) ordAsc = !ordAsc; else { ordCol = c; ordAsc = true; }
+  }
+  function cella(v) {
+    if (v === null || v === undefined) return "";
+    return typeof v === "object" ? JSON.stringify(v) : String(v);
+  }
+
   // Quanti test sono passati sul totale.
   const passati = $derived(risultatiTest.filter((t) => t.passato).length);
 
@@ -76,14 +104,32 @@
     </div>
 
     {#if tab === "Body"}
-      {#if percorsi.length > 0}
+      {#if percorsi.length > 0 || datiTab}
         <div class="cap-bar">
-          <span class="cap-toggle" class:on={cattura} onclick={() => (cattura = !cattura)}>
-            ⌖ {cattura ? "Mostra corpo" : "Cattura campi"}
-          </span>
+          {#if percorsi.length > 0}
+            <span class="cap-toggle" class:on={cattura} onclick={() => { cattura = !cattura; if (cattura) tabella = false; }}>
+              ⌖ {cattura ? "Mostra corpo" : "Cattura campi"}
+            </span>
+          {/if}
+          {#if datiTab}
+            <span class="cap-toggle" class:on={tabella} onclick={() => { tabella = !tabella; if (tabella) cattura = false; }}>
+              ▦ {tabella ? "Mostra corpo" : "Tabella"}
+            </span>
+          {/if}
         </div>
       {/if}
-      {#if cattura}
+      {#if tabella && datiTab}
+        <div class="resp-code" style="overflow:auto">
+          <table class="kv tab-grid">
+            <thead><tr>{#each datiTab.colonne as c}<th onclick={() => ordina(c)}>{c}{ordCol === c ? (ordAsc ? " ▲" : " ▼") : ""}</th>{/each}</tr></thead>
+            <tbody>
+              {#each datiTab.righe as r}
+                <tr>{#each datiTab.colonne as c}<td title={cella(r?.[c])}>{cella(r?.[c])}</td>{/each}</tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {:else if cattura}
         <div class="resp-code">
           <table class="kv cap-tab">
             <tbody>
@@ -192,4 +238,7 @@
   .cap-act { white-space: nowrap; text-align: right; }
   .cap-b { cursor: pointer; color: var(--txt-faint); margin-left: 8px; }
   .cap-b:hover { color: var(--accent); }
+  .tab-grid th { position: sticky; top: 0; background: var(--panel-2); cursor: pointer; white-space: nowrap; color: var(--txt-dim); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--border); user-select: none; }
+  .tab-grid th:hover { color: var(--txt); }
+  .tab-grid td { padding: 4px 10px; border-bottom: 1px solid var(--border); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; }
 </style>

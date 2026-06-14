@@ -1,5 +1,6 @@
 <script>
   // Barra attività stile VS Code: cambia la vista mostrata nella sidebar.
+  import { t } from "../lib/i18n.svelte.js";
   let { vista, onCambiaVista } = $props();
 
   // Voci: chiave vista + tooltip + path SVG dell'icona.
@@ -21,7 +22,7 @@
     <div
       class="ri"
       class:active={vista === voce.v}
-      title={voce.t}
+      title={t(voce.t)}
       onclick={() => onCambiaVista(voce.v)}
     >
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
