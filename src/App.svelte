@@ -22,6 +22,7 @@
   import FolderConfig from "./components/FolderConfig.svelte";
   import Socket from "./components/Socket.svelte";
   import BatchResults from "./components/BatchResults.svelte";
+  import Strumenti from "./components/Strumenti.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -213,6 +214,24 @@
     try { righe = await api.diffTesti(a ?? "", b ?? ""); } catch (e) { console.error(e); }
     const tab = { id: prossimoId++, tipo: "diff", file: null, titolo: `Diff · ${etichetta}`, righe };
     tabs.push(tab); tabAttivoId = tab.id;
+  }
+
+  // Apre il pannello Strumenti in un tab.
+  function apriStrumenti() {
+    const esistente = tabs.find((t) => t.tipo === "strumenti");
+    if (esistente) { tabAttivoId = esistente.id; return; }
+    const tab = { id: prossimoId++, tipo: "strumenti", titolo: "🧰 Strumenti" };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
+  // Apre una richiesta importata (da fetch/cURL) come tab "volante".
+  function apriRichiestaImportata(r) {
+    r.headers ??= []; r.params ??= []; r.tests ??= [];
+    r.auth ??= { tipo: "none", token: "", utente: "", password: "", oauth2: null };
+    r.pre_script ??= ""; r.post_script ??= "";
+    const tab = { id: prossimoId++, tipo: "request", file: null, dir: "", collezione: "(import)",
+      richiesta: r, salvato: "", risposta: null, risultatiTest: [], inCorso: false, errore: null };
+    tabs.push(tab); tabAttivoId = tab.id;
+    logga("ok", "Richiesta importata");
   }
 
   // Apre una nuova console WebSocket o SSE in un tab.
@@ -596,6 +615,7 @@
     out.push({ tag: "⚡", label: "Aggiorna snapshot (richiesta attiva)", azione: aggiornaSnapshotAttivo });
     out.push({ tag: "🔌", label: "Nuova connessione WebSocket", azione: () => nuovaConnessione("ws") });
     out.push({ tag: "🔌", label: "Nuova connessione SSE", azione: () => nuovaConnessione("sse") });
+    out.push({ tag: "🧰", label: "Apri Strumenti (JWT, Base64, HMAC, import…)", azione: apriStrumenti });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
     // Confronto affiancato: diff della risposta attiva con un altro tab.
     if (tabAttivo?.tipo === "request" && tabAttivo.risposta) {
@@ -718,6 +738,8 @@
           />
         {:else if tabAttivo.tipo === "socket"}
           <Socket tab={tabAttivo} />
+        {:else if tabAttivo.tipo === "strumenti"}
+          <Strumenti {environments} onImportaRichiesta={apriRichiestaImportata} />
         {:else if tabAttivo.tipo === "batch"}
           <BatchResults titolo={tabAttivo.titolo} righe={tabAttivo.righe} inCorso={tabAttivo.inCorso}
             ognis={tabAttivo.ognis}
