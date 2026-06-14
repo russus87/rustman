@@ -24,6 +24,7 @@
   import BatchResults from "./components/BatchResults.svelte";
   import Strumenti from "./components/Strumenti.svelte";
   import CheatSheet from "./components/CheatSheet.svelte";
+  import GraphQL from "./components/GraphQL.svelte";
   import Response from "./components/Response.svelte";
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
@@ -235,6 +236,12 @@
     let righe = [];
     try { righe = await api.diffTesti(a ?? "", b ?? ""); } catch (e) { console.error(e); }
     const tab = { id: prossimoId++, tipo: "diff", file: null, titolo: `Diff · ${etichetta}`, righe };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
+
+  // Apre una nuova console GraphQL in un tab.
+  function nuovaGraphQL() {
+    const tab = { id: prossimoId++, tipo: "graphql", titolo: "GraphQL", url: "", query: "query {\n  \n}", variabili: "{}" };
     tabs.push(tab); tabAttivoId = tab.id;
   }
 
@@ -639,6 +646,7 @@
     out.push({ tag: "🔌", label: "Nuova connessione WebSocket", azione: () => nuovaConnessione("ws") });
     out.push({ tag: "🔌", label: "Nuova connessione SSE", azione: () => nuovaConnessione("sse") });
     out.push({ tag: "🧰", label: "Apri Strumenti (JWT, Base64, HMAC, import…)", azione: apriStrumenti });
+    out.push({ tag: "◆", label: "Nuova query GraphQL", azione: nuovaGraphQL });
     out.push({ tag: "⌨", label: "Scorciatoie da tastiera", azione: () => (cheatAperto = true) });
     out.push({ tag: "⚡", label: "Svuota cronologia", azione: pulisciStoria });
     // Confronto affiancato: diff della risposta attiva con un altro tab.
@@ -764,6 +772,8 @@
           <Socket tab={tabAttivo} />
         {:else if tabAttivo.tipo === "strumenti"}
           <Strumenti {environments} onImportaRichiesta={apriRichiestaImportata} />
+        {:else if tabAttivo.tipo === "graphql"}
+          <GraphQL tab={tabAttivo} variabili={variabiliAttive} />
         {:else if tabAttivo.tipo === "batch"}
           <BatchResults titolo={tabAttivo.titolo} righe={tabAttivo.righe} inCorso={tabAttivo.inCorso}
             ognis={tabAttivo.ognis}

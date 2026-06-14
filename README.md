@@ -30,6 +30,7 @@ Client API desktop (e web) ispirato a Postman, scritto in **Rust + Tauri + Svelt
 - **Snapshot / golden testing** con ignore-paths e approvazione della baseline.
 - **API test coverage** dallo spec OpenAPI; **variabili faker** (`{{$name}}`, `{{$email}}`, …).
 - **Test di carico** a N richieste o a **durata/RPS** con warmup; report e grafici.
+- **GraphQL**: editor query+variabili, esecuzione e explorer dello schema (introspezione).
 - **WebSocket / SSE**: console interattiva (invio/ricezione) e stream di eventi live.
 - **Impostazioni per-richiesta** (timeout, redirect, verifica TLS, retry su 429),
   **cookie jar** di sessione e **rate-limit aware** (`Retry-After`).

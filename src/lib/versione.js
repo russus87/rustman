@@ -1,9 +1,15 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "0.29.0";
+export const VERSIONE = "0.30.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "0.30.0",
+    voci: [
+      "GraphQL: console con editor query+variabili, esecuzione e explorer dello schema (introspezione).",
+    ],
+  },
   {
     versione: "0.29.0",
     voci: [
