@@ -80,7 +80,9 @@ jobs:
         run: |
           npm install
           npm run build
-          cargo build --release -p app
+          # --features custom-protocol: serve gli asset incorporati invece del dev server.
+          # Senza, il binario all'avvio cerca http://localhost:1420 e non si avvia.
+          cargo build --release -p app --features custom-protocol
 
       - name: Crea il pacchetto con makepkg
         run: |

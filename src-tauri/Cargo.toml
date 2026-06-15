@@ -14,6 +14,13 @@ rust-version = "1.77.2"
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Attiva il protocollo custom che serve gli asset incorporati al posto del dev server.
+# Senza questa feature un `cargo build` produce un binario in modalità "dev" che
+# all'avvio cerca http://localhost:1420. `cargo tauri build` la attiva da sé,
+# ma il pacchetto Arch usa `cargo build`: NON RIMUOVERE.
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2.6.2", features = [] }
 
