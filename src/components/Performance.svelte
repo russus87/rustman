@@ -158,8 +158,8 @@
           <svg viewBox="0 0 {W} {H}" width="100%" preserveAspectRatio="none" style="display:block">
             <defs>
               <linearGradient id="areaPerf" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#8b6dff" stop-opacity="0.30" />
-                <stop offset="100%" stop-color="#8b6dff" stop-opacity="0" />
+                <stop offset="0%" stop-color="var(--accent-2)" stop-opacity="0.30" />
+                <stop offset="100%" stop-color="var(--accent-2)" stop-opacity="0" />
               </linearGradient>
             </defs>
             <!-- assi Y -->
@@ -186,7 +186,7 @@
                 y={(pad.t + ih - bh).toFixed(1)}
                 width={(bw - 2).toFixed(1)}
                 height={bh.toFixed(1)}
-                fill="#8b6dff"
+                fill="var(--accent-2)"
                 rx="1"
               />
             {/each}

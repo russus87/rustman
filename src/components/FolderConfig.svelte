@@ -99,6 +99,6 @@
   .fc-rm:hover { color: var(--red); }
   .fc-mini { background: var(--panel-3); color: var(--txt); border: 1px solid var(--border-2); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; margin-top: 6px; }
   .fc-actions { margin-top: 18px; }
-  .fc-save { background: linear-gradient(145deg,#8b6dff,#6c47ff); border: none; color: #fff; border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+  .fc-save { background: linear-gradient(145deg,var(--accent-2),var(--accent)); border: none; color: #fff; border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
   .fc-hint { margin-top: 12px; color: var(--txt-faint); font-size: 11.5px; max-width: 560px; }
 </style>

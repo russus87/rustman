@@ -294,12 +294,58 @@ pub struct Cattura {
     pub campo: String,
 }
 
-/// Una catena di chiamate da eseguire in sequenza (integration test).
+/// Un nodo del flusso visuale (workflow a grafo).
+/// Coesiste con `passi`: i nodi aggiungono posizione e topologia (rami/merge),
+/// mentre la configurazione del passo resta abbinata per `file`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodoFlusso {
+    /// Identificatore stabile del nodo nel grafo.
+    pub id: String,
+    /// "start" | "request" (default "request").
+    #[serde(default)]
+    pub tipo: String,
+    /// Percorso file della richiesta (per i nodi "request").
+    #[serde(default)]
+    pub file: String,
+    /// Etichetta mostrata sul nodo (fallback: nome della richiesta).
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub x: f64,
+    #[serde(default)]
+    pub y: f64,
+}
+
+/// Un arco (connessione) fra due nodi del flusso.
+/// Se `condizione` è presente, l'arco viene seguito solo quando la condizione
+/// è vera sulla risposta del nodo sorgente (permette rami/branch). Più archi in
+/// entrata su uno stesso nodo realizzano il merge (il nodo gira una volta sola).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArcoFlusso {
+    /// Id del nodo sorgente.
+    pub da: String,
+    /// Id del nodo destinazione.
+    pub a: String,
+    /// Etichetta opzionale del ramo (mostrata sull'arco).
+    #[serde(default)]
+    pub ramo: String,
+    /// Condizione di gating dell'arco (assente = sempre percorso).
+    #[serde(default)]
+    pub condizione: Option<Condizione>,
+}
+
+/// Una catena di chiamate da eseguire (integration test).
+/// `passi` resta il formato lineare usato dalla CLI; `nodi`/`archi` descrivono
+/// la stessa catena come grafo visuale (retro-compatibili: assenti sulle vecchie).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catena {
     pub nome: String,
     #[serde(default)]
     pub passi: Vec<Passo>,
+    #[serde(default)]
+    pub nodi: Vec<NodoFlusso>,
+    #[serde(default)]
+    pub archi: Vec<ArcoFlusso>,
 }
 
 /// Una catena con il percorso del file da cui è stata caricata.

@@ -74,7 +74,7 @@
   .cp-input { width: 100%; background: var(--panel-2); border: none; border-bottom: 1px solid var(--border); padding: 14px 16px; color: var(--txt); font-size: 15px; outline: none; }
   .cp-list { max-height: 50vh; overflow-y: auto; padding: 6px; }
   .cp-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; cursor: pointer; }
-  .cp-item.active { background: rgba(124,92,255,.18); }
+  .cp-item.active { background: var(--accent-soft); }
   .cp-tag { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 5px; background: var(--panel-3); color: var(--txt-dim); }
   .cp-tag.get { color: var(--green); } .cp-tag.post { color: #e2b340; }
   .cp-tag.put { color: #4a9eff; } .cp-tag.del { color: var(--red); }

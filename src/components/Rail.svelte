@@ -5,6 +5,7 @@
 
   // Voci: chiave vista + tooltip + path SVG dell'icona.
   const voci = [
+    { v: "dashboard", t: "Dashboard", d: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" },
     { v: "collezioni", t: "Collections", d: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" },
     { v: "run", t: "Run", d: "M5 3l14 9-14 9z" },
     { v: "storia", t: "History", d: "M12 8v5l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v5h5" },

@@ -90,7 +90,7 @@
   .env-list { max-height: 180px; overflow-y: auto; padding: 0 8px; border-bottom: 1px solid var(--border); }
   .env-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; cursor: pointer; color: var(--txt-dim); }
   .env-item:hover { background: var(--panel-3); }
-  .env-item.active { background: rgba(124,92,255,.13); color: var(--txt); }
+  .env-item.active { background: var(--accent-soft); color: var(--txt); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--txt-faint); }
   .dot.on { background: var(--green); box-shadow: 0 0 8px rgba(63,185,80,.6); }
   .nm { font-size: 12.5px; }
@@ -110,7 +110,7 @@
   .mini { background: var(--panel-3); color: var(--txt); border: 1px solid var(--border-2); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; margin-top: 6px; }
   .mini:hover:not(:disabled) { background: #22222e; }
   .mini:disabled { opacity: .55; cursor: default; }
-  .mini.primario { background: linear-gradient(145deg,#8b6dff,#6c47ff); border: none; color: #fff; }
+  .mini.primario { background: linear-gradient(145deg,var(--accent-2),var(--accent)); border: none; color: #fff; }
   .azioni { display: flex; gap: 6px; margin-top: 12px; }
   .hint { margin-top: 12px; color: var(--txt-faint); font-size: 11.5px; }
   .hint code { font-family: var(--mono); color: var(--accent-2); }

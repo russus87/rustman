@@ -169,14 +169,14 @@
   .spark { width: 90px; height: 22px; flex: none; }
   .t-stat { font-size: 11px; color: var(--txt-faint); font-family: var(--mono); }
   .cmp-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
-  .cmp-btn { flex: 1; background: linear-gradient(145deg,#8b6dff,#6c47ff); border: none; color: #fff; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  .cmp-btn { flex: 1; background: linear-gradient(145deg,var(--accent-2),var(--accent)); border: none; color: #fff; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
   .cmp-x { cursor: pointer; color: var(--txt-faint); padding: 0 4px; }
   .cmp-x:hover { color: var(--red); }
   .cmp-hint { padding: 4px 12px 8px; font-size: 11px; color: var(--txt-faint); }
   .sto-list { overflow-y: auto; padding: 4px 8px; }
   .sto-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 6px; border: 1px solid transparent; }
   .sto-item:hover { background: var(--panel-3); border-color: var(--border); }
-  .sto-item.sel { border-color: var(--accent); background: rgba(124,92,255,.10); }
+  .sto-item.sel { border-color: var(--accent); background: var(--accent-soft); }
   .cmp-cb { margin-top: 3px; cursor: pointer; }
   .sto-body { flex: 1; cursor: pointer; min-width: 0; }
   .riga1 { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }

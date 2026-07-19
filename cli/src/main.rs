@@ -14,7 +14,10 @@
 
 mod script;
 
-use rustman_core::model::{Cattura, Condizione, Nodo, Passo, Richiesta, Risposta, RisultatoRun, RisultatoTest};
+use rustman_core::model::{
+    ArcoFlusso, Catena, Cattura, Condizione, Nodo, NodoFlusso, Passo, Richiesta, Risposta,
+    RisultatoRun, RisultatoTest,
+};
 use rustman_core::{http, storage, test, vars};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -346,23 +349,23 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
 
     // Se è una catena, eseguiamo il flusso (con condizioni/catture); altrimenti
     // una selezione piatta di richieste.
-    let passi: Option<Vec<Passo>> = match &opz.catena {
+    let catena_sel: Option<Catena> = match &opz.catena {
         Some(nome) => {
             let catene = storage::carica_catene(root).map_err(|e| e.to_string())?;
             let cat = catene
                 .iter()
                 .find(|c| c.catena.nome.eq_ignore_ascii_case(nome))
                 .ok_or_else(|| format!("Catena '{nome}' non trovata."))?;
-            Some(cat.catena.passi.clone())
+            Some(cat.catena.clone())
         }
         None => None,
     };
-    let selezione = if passi.is_none() {
+    let selezione = if catena_sel.is_none() {
         seleziona(root, &opz, &per_file)?
     } else {
         Vec::new()
     };
-    if passi.is_none() && selezione.is_empty() {
+    if catena_sel.is_none() && selezione.is_empty() {
         return Err("Nessuna richiesta da eseguire con i filtri indicati.".into());
     }
 
@@ -398,8 +401,12 @@ async fn esegui(opz: Opzioni) -> Result<bool, String> {
             for (k, v) in riga {
                 variabili.insert(k.clone(), v.clone());
             }
-            if let Some(passi) = &passi {
-                let r = esegui_flusso(root, passi, &per_file, &mut variabili, opz.retry, opz.delay, opz.update_snapshots).await;
+            if let Some(cat) = &catena_sel {
+                let r = if cat.nodi.is_empty() {
+                    esegui_flusso(root, &cat.passi, &per_file, &mut variabili, opz.retry, opz.delay, opz.update_snapshots).await
+                } else {
+                    esegui_grafo(root, cat, &per_file, &mut variabili, opz.retry, opz.delay, opz.update_snapshots).await
+                };
                 esiti.extend(r);
             } else {
                 for (file, richiesta) in &selezione {
@@ -848,6 +855,164 @@ async fn esegui_flusso(
         out.push(esito);
         if !ok && passo.al_fallimento != "continua" {
             break;
+        }
+    }
+    out
+}
+
+/// Ordine topologico (Kahn) di TUTTI i nodi del flusso; cicli/isolati in coda.
+fn ordine_di_visita<'a>(nodi: &'a [NodoFlusso], archi: &'a [ArcoFlusso]) -> Vec<&'a str> {
+    use std::collections::{HashSet, VecDeque};
+    let ids: HashSet<&str> = nodi.iter().map(|n| n.id.as_str()).collect();
+    let mut uscite: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut grado: HashMap<&str, usize> = nodi.iter().map(|n| (n.id.as_str(), 0)).collect();
+    for a in archi {
+        if !ids.contains(a.da.as_str()) || !ids.contains(a.a.as_str()) {
+            continue;
+        }
+        uscite.entry(a.da.as_str()).or_default().push(a.a.as_str());
+        *grado.entry(a.a.as_str()).or_insert(0) += 1;
+    }
+    let mut coda: VecDeque<&str> = nodi
+        .iter()
+        .map(|n| n.id.as_str())
+        .filter(|id| grado.get(id).copied().unwrap_or(0) == 0)
+        .collect();
+    let mut visti: HashSet<&str> = HashSet::new();
+    let mut ordine = Vec::new();
+    while let Some(id) = coda.pop_front() {
+        if !visti.insert(id) {
+            continue;
+        }
+        ordine.push(id);
+        if let Some(succ) = uscite.get(id) {
+            for &s in succ {
+                if let Some(g) = grado.get_mut(s) {
+                    if *g > 0 {
+                        *g -= 1;
+                    }
+                    if *g == 0 {
+                        coda.push_back(s);
+                    }
+                }
+            }
+        }
+    }
+    for n in nodi {
+        if !visti.contains(n.id.as_str()) {
+            ordine.push(n.id.as_str());
+        }
+    }
+    ordine
+}
+
+/// Esegue il flusso come GRAFO: attiva i nodi radice, fa girare ogni nodo
+/// raggiunto una volta sola (merge) e propaga lungo gli archi la cui condizione
+/// è vera sulla risposta del sorgente (branch). La config del nodo
+/// (skip/catture/al_fallimento) è abbinata al passo per file.
+async fn esegui_grafo(
+    root: &Path,
+    catena: &Catena,
+    per_file: &HashMap<String, Richiesta>,
+    variabili: &mut HashMap<String, String>,
+    retry: u32,
+    delay: u64,
+    update_snapshots: bool,
+) -> Vec<Esito> {
+    use std::collections::HashSet;
+    let mut out = Vec::new();
+
+    let per_id: HashMap<&str, &NodoFlusso> =
+        catena.nodi.iter().map(|n| (n.id.as_str(), n)).collect();
+    let per_passo: HashMap<&str, &Passo> =
+        catena.passi.iter().map(|p| (p.file.as_str(), p)).collect();
+
+    let mut uscite: HashMap<&str, Vec<&ArcoFlusso>> = HashMap::new();
+    let mut grado_in: HashMap<&str, usize> =
+        catena.nodi.iter().map(|n| (n.id.as_str(), 0)).collect();
+    for a in &catena.archi {
+        if !per_id.contains_key(a.da.as_str()) || !per_id.contains_key(a.a.as_str()) {
+            continue;
+        }
+        uscite.entry(a.da.as_str()).or_default().push(a);
+        *grado_in.entry(a.a.as_str()).or_insert(0) += 1;
+    }
+
+    let mut attivo: HashSet<&str> = HashSet::new();
+    let mut pred_resp: HashMap<&str, Risposta> = HashMap::new();
+    for n in &catena.nodi {
+        if *grado_in.get(n.id.as_str()).unwrap_or(&0) == 0 {
+            attivo.insert(n.id.as_str());
+        }
+    }
+
+    for id in ordine_di_visita(&catena.nodi, &catena.archi) {
+        let Some(nodo) = per_id.get(id).copied() else {
+            continue;
+        };
+        let is_start = nodo.tipo == "start";
+        if !attivo.contains(id) {
+            if !is_start {
+                let et = if nodo.label.is_empty() { &nodo.file } else { &nodo.label };
+                println!("  ↷ ramo non attivo: {et}");
+            }
+            continue;
+        }
+
+        let mut resp: Option<Risposta> = pred_resp.get(id).cloned();
+        if !is_start {
+            let passo_default;
+            let passo: &Passo = match per_passo.get(nodo.file.as_str()) {
+                Some(p) => p,
+                None => {
+                    passo_default = Passo {
+                        file: nodo.file.clone(),
+                        condizione: None,
+                        catture: vec![],
+                        al_fallimento: String::new(),
+                    };
+                    &passo_default
+                }
+            };
+            if !valuta_condizione(&passo.condizione, pred_resp.get(id), variabili) {
+                println!("  ↷ saltato: {}", nodo.file);
+                continue;
+            }
+            let Some(richiesta) = per_file.get(&nodo.file) else {
+                eprintln!("  ✗ richiesta del flusso non trovata: {}", nodo.file);
+                break;
+            };
+            let dir = nodo.file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+            let req = storage::eredita(root, dir, richiesta);
+            let (esito, risposta) =
+                esegui_richiesta(root, &nodo.file, &req, variabili, retry, delay, update_snapshots).await;
+            let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
+            if let Some(r) = &risposta {
+                let fatte = applica_catture(&passo.catture, r, variabili);
+                for (k, v) in &fatte {
+                    println!("  ⇲ {k} = {v}");
+                }
+            }
+            resp = risposta;
+            out.push(esito);
+            if !ok && passo.al_fallimento != "continua" {
+                break;
+            }
+        }
+
+        // Propaga: attiva i target degli archi la cui condizione è soddisfatta.
+        if let Some(archi) = uscite.get(id) {
+            for a in archi {
+                if a.condizione.is_some()
+                    && !valuta_condizione(&a.condizione, resp.as_ref(), variabili)
+                {
+                    continue;
+                }
+                attivo.insert(a.a.as_str());
+                if let Some(r) = &resp {
+                    pred_resp.entry(a.a.as_str()).or_insert_with(|| r.clone());
+                }
+            }
         }
     }
     out

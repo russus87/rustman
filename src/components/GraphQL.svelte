@@ -99,7 +99,7 @@
   .url { flex: 1; background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; color: var(--txt); font-family: var(--mono); font-size: 13px; outline: none; }
   .url:focus { border-color: var(--accent); }
   .btn { border: 1px solid var(--border-2); background: var(--panel-3); color: var(--txt); border-radius: 7px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
-  .btn.run { background: linear-gradient(145deg,#8b6dff,#6c47ff); border: none; color: #fff; }
+  .btn.run { background: linear-gradient(145deg,var(--accent-2),var(--accent)); border: none; color: #fff; }
   .btn:disabled { opacity: .5; }
   .cols { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
   .left { display: flex; flex-direction: column; padding: 12px 14px; border-right: 1px solid var(--border); min-height: 0; }

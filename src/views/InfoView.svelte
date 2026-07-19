@@ -28,14 +28,14 @@
   .info-head { padding: 14px 14px 8px; font-size: 11px; font-weight: 600; letter-spacing: .8px; color: var(--txt-faint); }
   .info-body { padding: 8px 14px; overflow-y: auto; }
   .logo-riga { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-  .logo { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(145deg,#8b6dff,#5b3df0); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px; }
+  .logo { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(145deg,var(--accent-2),var(--accent-strong)); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px; }
   .nome { font-weight: 600; font-size: 15px; }
   .ver { color: var(--txt-dim); font-size: 12.5px; font-family: var(--mono); }
   .cl-titolo { font-size: 11px; font-weight: 600; letter-spacing: .6px; color: var(--txt-faint); margin-bottom: 8px; }
   .cl { margin-bottom: 14px; padding-left: 10px; border-left: 2px solid var(--border); }
   .cl.corrente { border-left-color: var(--accent); }
   .cl-v { font-family: var(--mono); font-size: 12.5px; color: var(--txt); margin-bottom: 5px; }
-  .tag { background: rgba(124,92,255,.18); color: var(--accent-2); font-size: 10px; padding: 1px 6px; border-radius: 5px; font-family: var(--sans); }
+  .tag { background: var(--accent-soft); color: var(--accent-2); font-size: 10px; padding: 1px 6px; border-radius: 5px; font-family: var(--sans); }
   ul { margin: 0 0 0 16px; padding: 0; }
   li { color: var(--txt-dim); font-size: 12px; margin-bottom: 3px; }
 </style>

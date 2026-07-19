@@ -67,7 +67,7 @@
   .ws-list { flex: 1; overflow-y: auto; padding: 0 8px; }
   .ws-item { display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: 6px; cursor: pointer; color: var(--txt-dim); }
   .ws-item:hover { background: var(--panel-3); }
-  .ws-item.active { background: rgba(124,92,255,.13); color: var(--txt); }
+  .ws-item.active { background: var(--accent-soft); color: var(--txt); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--txt-faint); flex-shrink: 0; }
   .dot.on { background: var(--green); box-shadow: 0 0 8px rgba(63,185,80,.6); }
   .path { flex: 1; font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -224,7 +224,7 @@
   <div style="display:flex;flex-direction:column;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border)">
     <input style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--txt);font-size:12px;outline:none" placeholder="cerca…" bind:value={fr.cerca} />
     <input style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--txt);font-size:12px;outline:none" placeholder="sostituisci con…" bind:value={fr.con} />
-    <button style="background:linear-gradient(145deg,#8b6dff,#6c47ff);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer" onclick={applicaFr}>Applica a tutte</button>
+    <button style="background:linear-gradient(145deg,var(--accent-2),var(--accent));border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer" onclick={applicaFr}>Applica a tutte</button>
   </div>
 {/if}
 

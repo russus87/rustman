@@ -610,7 +610,7 @@
     box-shadow: 0 12px 32px rgba(0,0,0,.45); overflow: hidden; max-height: 220px; overflow-y: auto;
   }
   .ac-item { display: flex; align-items: center; gap: 4px; padding: 7px 10px; cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--txt); }
-  .ac-item.active { background: rgba(124,92,255,.18); }
+  .ac-item.active { background: var(--accent-soft); }
   .ac-brace { color: var(--txt-faint); }
   .ac-tag { margin-left: auto; font-size: 10px; color: var(--accent-2); background: var(--panel-3); padding: 1px 5px; border-radius: 4px; }
   .url-preview {

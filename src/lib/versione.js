@@ -1,9 +1,20 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "1.0.1";
+export const VERSIONE = "1.1.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "1.1.0",
+    voci: [
+      "🕸 Nuovo canvas dei flussi: costruisci i test d'integrazione come grafo a nodi (branch e merge reali).",
+      "Rami condizionali sugli archi e inspector di nodo (catture, al-fallimento, skip) direttamente sul canvas.",
+      "Motore di esecuzione a grafo, allineato anche nella CLI (rustman run --chain).",
+      "Nuova Home dashboard: KPI del workspace, attività recente e distribuzione dei metodi.",
+      "Accento dinamico: cambia colore a runtime (Rust/Verde/Viola o personalizzato) con l'intera scala derivata.",
+      "Guida integrata al canvas e restyle dell'interfaccia.",
+    ],
+  },
   {
     versione: "1.0.1",
     voci: [

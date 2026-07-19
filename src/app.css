@@ -12,16 +12,24 @@
   --txt:#e7e7ee;           /* testo principale */
   --txt-dim:#9a9aab;       /* testo secondario */
   --txt-faint:#5f5f72;     /* testo tenue */
-  --accent:#7c5cff;        /* viola accento */
-  --accent-2:#8b6dff;
+  --accent:#7c5cff;        /* accento (impostato a runtime da settings) */
+  /* Le varianti sotto sono derivate a runtime in settings.svelte.js;
+     questi sono i fallback (viola) per il primo paint. */
+  --accent-2:#8f72ff;      /* fine gradiente */
+  --accent-strong:#6a4fdc; /* stato premuto */
+  --accent-soft:rgba(124,92,255,.14);  /* sfondo tenue */
+  --accent-line:rgba(124,92,255,.35);  /* bordi/selezione tinti */
+  --accent-contrast:#ffffff;           /* testo su fondo accento */
   --green:#3fb950;
   --green-soft:#2ea043;
   --red:#f85149;
   --orange:#e3a008;
   --blue:#388bfd;
   --cyan:#39d0d8;
-  --radius:8px;
-  --shadow:0 8px 30px rgba(0,0,0,.45);
+  --radius:10px;
+  --radius-lg:14px;
+  --shadow:0 10px 34px rgba(0,0,0,.42);
+  --shadow-soft:0 4px 18px rgba(0,0,0,.28);
   --mono:"JetBrains Mono","SF Mono",ui-monospace,"Cascadia Code",Menlo,monospace;
   --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }
@@ -38,7 +46,8 @@
   --txt:#1b1e26;
   --txt-dim:#5b6273;
   --txt-faint:#9aa0b0;
-  --shadow:0 8px 30px rgba(20,22,40,.12);
+  --shadow:0 10px 30px rgba(20,22,40,.12);
+  --shadow-soft:0 4px 16px rgba(20,22,40,.08);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -65,7 +74,7 @@ body{
 .brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
 .brand .logo{
   width:22px;height:22px;border-radius:6px;
-  background:linear-gradient(145deg,#8b6dff,#5b3df0);
+  background:linear-gradient(145deg,var(--accent-2),var(--accent-strong));
   display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;
   box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;
 }
@@ -80,7 +89,7 @@ body{
 }
 .rail .avatar{
   width:30px;height:30px;border-radius:8px;margin-bottom:8px;
-  background:linear-gradient(145deg,#8b6dff,#5b3df0);
+  background:linear-gradient(145deg,var(--accent-2),var(--accent-strong));
   display:grid;place-items:center;color:#fff;font-weight:700;
   box-shadow:0 0 0 1px rgba(255,255,255,.08) inset;
 }
@@ -89,7 +98,7 @@ body{
   color:var(--txt-faint);cursor:pointer;position:relative;
 }
 .rail .ri:hover{background:var(--panel-3);color:var(--txt)}
-.rail .ri.active{color:var(--accent-2);background:rgba(124,92,255,.12)}
+.rail .ri.active{color:var(--accent-2);background:var(--accent-soft)}
 .rail .ri.active::before{content:"";position:absolute;left:-8px;width:3px;height:20px;border-radius:3px;background:var(--accent)}
 .rail .grow{flex:1}
 
@@ -114,7 +123,7 @@ body{
   border-radius:7px;padding:7px 10px 7px 30px;color:var(--txt);font-size:12.5px;outline:none;
 }
 .search input::placeholder{color:var(--txt-faint)}
-.search input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,92,255,.15)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .search .si{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--txt-faint)}
 
 .tree{flex:1;overflow-y:auto;padding:2px 8px 12px}
@@ -125,7 +134,7 @@ body{
 .folder .fname{font-weight:500}
 .req{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 30px;border-radius:6px;cursor:pointer;color:var(--txt-dim);position:relative}
 .req:hover{background:var(--panel-3)}
-.req.active{background:rgba(124,92,255,.13);color:var(--txt)}
+.req.active{background:var(--accent-soft);color:var(--txt)}
 .req .m{font-size:10.5px;font-weight:700;width:42px;letter-spacing:.3px}
 .m.get{color:var(--green)}.m.post{color:#d9a441}.m.put{color:var(--blue)}.m.del{color:var(--red)}
 .req .rname{font-size:12.5px}
@@ -196,14 +205,14 @@ body{
   border-radius:8px;padding:0 12px;
 }
 .url-input input{flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:var(--mono);font-size:13px;padding:10px 0}
-.url-input input::selection{background:rgba(124,92,255,.35)}
+.url-input input::selection{background:var(--accent-line)}
 .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:8px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;padding:10px 16px}
 .btn:disabled{opacity:.55;cursor:default}
-.btn-send{background:linear-gradient(145deg,#8b6dff,#6c47ff);color:#fff;box-shadow:0 2px 12px rgba(108,71,255,.35)}
+.btn-send{background:linear-gradient(145deg,var(--accent-2),var(--accent));color:var(--accent-contrast);box-shadow:0 4px 14px var(--accent-soft)}
 .btn-send:hover{filter:brightness(1.08)}
 .btn-split{display:flex;align-items:stretch;border-radius:8px;overflow:hidden}
 .btn-split .main{border-radius:8px 0 0 8px}
-.btn-split .caret{background:#6c47ff;color:#fff;display:grid;place-items:center;width:30px;cursor:pointer;border-left:1px solid rgba(255,255,255,.15)}
+.btn-split .caret{background:var(--accent-strong);color:var(--accent-contrast);display:grid;place-items:center;width:30px;cursor:pointer;border-left:1px solid rgba(255,255,255,.15)}
 .btn-save{background:var(--panel-3);color:var(--txt);border:1px solid var(--border-2)}
 .btn-save:hover{background:#22222e}
 .icon-btn{width:38px;height:38px;border-radius:8px;background:var(--panel-3);border:1px solid var(--border-2);display:grid;place-items:center;color:var(--txt-dim);cursor:pointer}
@@ -278,8 +287,8 @@ body{
 }
 .commit-box textarea:focus{border-color:var(--accent)}
 .commit-btn{display:flex;margin-top:10px;border-radius:8px;overflow:hidden}
-.commit-btn .main{flex:1;background:linear-gradient(145deg,#8b6dff,#6c47ff);color:#fff;border:none;padding:10px;font-weight:600;cursor:pointer}
-.commit-btn .caret{width:34px;background:#6c47ff;color:#fff;display:grid;place-items:center;cursor:pointer;border-left:1px solid rgba(255,255,255,.15)}
+.commit-btn .main{flex:1;background:linear-gradient(145deg,var(--accent-2),var(--accent));color:#fff;border:none;padding:10px;font-weight:600;cursor:pointer}
+.commit-btn .caret{width:34px;background:var(--accent-strong);color:var(--accent-contrast);display:grid;place-items:center;cursor:pointer;border-left:1px solid rgba(255,255,255,.15)}
 
 /* Diff viewer */
 .diff{display:flex;flex-direction:column;min-height:0}
@@ -365,3 +374,14 @@ body{
 .ctab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent)}
 .big-chart{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 8px 4px}
 .axis{font-family:var(--mono);font-size:10px;fill:var(--txt-faint)}
+
+/* ====== Softening estetico (angoli più morbidi + ombre soffici) ====== */
+/* Superfici "card": corner più generosi e leggera elevazione stile Donezo. */
+.metric,.big-chart{border-radius:var(--radius-lg);box-shadow:var(--shadow-soft)}
+.kpi-grid{border-radius:var(--radius-lg)}
+.err-box{border-radius:var(--radius-lg)}
+/* Controlli: input e bottoni un filo più tondi e morbidi. */
+.method-sel,.url-input,.btn,.icon-btn{border-radius:var(--radius)}
+.btn-send{border-radius:var(--radius)}
+/* Elementi flottanti: ombra soffice unificata. */
+.env{box-shadow:var(--shadow-soft)}

@@ -195,14 +195,14 @@
   .str { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .tabs { display: flex; gap: 2px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .t { padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--txt-dim); font-size: 12.5px; }
-  .t:hover { background: var(--panel-3); } .t.active { background: rgba(124,92,255,.18); color: var(--txt); }
+  .t:hover { background: var(--panel-3); } .t.active { background: var(--accent-soft); color: var(--txt); }
   .body { padding: 16px 20px; overflow-y: auto; max-width: 760px; }
   label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--txt-faint); margin: 12px 0 4px; }
   textarea, input, select { width: 100%; background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; color: var(--txt); font-family: var(--mono); font-size: 12.5px; outline: none; }
   textarea { min-height: 70px; resize: vertical; }
   textarea:focus, input:focus, select:focus { border-color: var(--accent); }
   pre { background: #0b0e14; border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; overflow: auto; font-size: 12.5px; white-space: pre-wrap; word-break: break-all; color: var(--txt); }
-  .btn { margin-top: 10px; background: linear-gradient(145deg,#8b6dff,#6c47ff); border: none; color: #fff; border-radius: 7px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+  .btn { margin-top: 10px; background: linear-gradient(145deg,var(--accent-2),var(--accent)); border: none; color: #fff; border-radius: 7px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
   .info { margin: 8px 0; font-size: 12.5px; color: var(--txt-dim); }
   .info.ok { color: var(--green); } .info.ko { color: var(--red); }
   .row { display: flex; gap: 10px; margin-bottom: 12px; }

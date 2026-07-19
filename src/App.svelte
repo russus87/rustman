@@ -4,7 +4,7 @@
   import * as api from "./lib/api.js";
   import { settings, applicaTema } from "./lib/settings.svelte.js";
   import { eseguiPre, eseguiPost, rispostaToRes } from "./lib/pm.js";
-  import { eseguiCatena } from "./lib/runner.js";
+  import { eseguiCatena, eseguiGrafo, sincronizzaPassi } from "./lib/runner.js";
   import { layout, ridimensiona } from "./lib/layout.svelte.js";
   import { logga } from "./lib/log.svelte.js";
   import Titlebar from "./components/Titlebar.svelte";
@@ -17,6 +17,7 @@
   import RunView from "./views/RunView.svelte";
   import HistoryView from "./views/HistoryView.svelte";
   import InfoView from "./views/InfoView.svelte";
+  import DashboardView from "./views/DashboardView.svelte";
   import Editor from "./components/Editor.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
   import FolderConfig from "./components/FolderConfig.svelte";
@@ -29,6 +30,7 @@
   import Performance from "./components/Performance.svelte";
   import DiffView from "./components/DiffView.svelte";
   import RunResults from "./components/RunResults.svelte";
+  import Workflow from "./components/Workflow.svelte";
   import LogPanel from "./components/LogPanel.svelte";
   import Splitter from "./components/Splitter.svelte";
 
@@ -39,6 +41,7 @@
   let ambienteAttivo = $state(null);
   let storia = $state([]);
   let runs = $state([]);
+  let catene = $state([]); // catene/flussi (per la dashboard)
   let percorsoWs = $state(""); // path del workspace (per preferiti/filtri salvati)
   async function ricaricaPercorso() {
     try { percorsoWs = await api.percorsoWorkspace(); } catch { percorsoWs = ""; }
@@ -56,6 +59,7 @@
   let prossimoId = 1;
 
   let segnaleGit = $state(0);
+  let segnaleRun = $state(0); // rinfresca la lista dei flussi dopo un salvataggio
 
   const tabAttivo = $derived(tabs.find((t) => t.id === tabAttivoId) ?? null);
 
@@ -83,12 +87,15 @@
   async function ricaricaRuns() {
     try { runs = await api.caricaRuns(); } catch (e) { console.error(e); }
   }
+  async function ricaricaCatene() {
+    try { catene = await api.caricaCatene(); } catch (e) { console.error(e); }
+  }
   async function pulisciStoria() {
     try { await api.pulisciStoria(); storia = []; } catch (e) { console.error(e); }
   }
   onMount(async () => {
     applicaTema();
-    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns(), ricaricaPercorso()]);
+    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns(), ricaricaCatene(), ricaricaPercorso()]);
   });
 
   // ---------------- History / replay ----------------
@@ -674,21 +681,69 @@
     logga("info", "Workspace cambiato");
   }
 
+  // Cambio vista dalla rail. "dashboard" è speciale: mostra la home a tutta
+  // larghezza nell'area centrale (deselezionando il tab attivo).
+  function cambiaVista(v) {
+    if (v === "dashboard") {
+      vista = "dashboard";
+      tabAttivoId = null;
+      ricaricaCatene(); ricaricaStoria();
+      return;
+    }
+    vista = v;
+  }
+
+  // Apre una catena nel canvas workflow (tab dedicato nell'area centrale).
+  function apriWorkflow(voce) {
+    const esistente = tabs.find((t) => t.tipo === "workflow" && t.file === voce.file);
+    if (esistente) { tabAttivoId = esistente.id; return; }
+    const catena = structuredClone($state.snapshot(voce.catena));
+    const tab = { id: prossimoId++, tipo: "workflow", titolo: `Flusso · ${catena.nome}`, file: voce.file, catena };
+    tabs.push(tab); tabAttivoId = tab.id;
+  }
+
+  // Salva le modifiche fatte nel canvas (persiste nodi/archi e i passi per la CLI).
+  async function salvaWorkflow(tab, catena) {
+    const conPassi = { ...catena, passi: sincronizzaPassi(catena) };
+    try {
+      const nuovoFile = await api.salvaCatena(tab.file, conPassi);
+      tab.file = nuovoFile;
+      tab.catena = conPassi;
+      tab.titolo = `Flusso · ${catena.nome}`;
+      segnaleRun++; // aggiorna la lista dei flussi nella RunView
+      logga("ok", `Flusso "${catena.nome}" salvato`);
+    } catch (e) {
+      logga("errore", `Salvataggio flusso fallito: ${e}`);
+    }
+  }
+
   // Esegue una catena e ne mostra i risultati in un tab dedicato.
   async function eseguiRun(catena) {
-    const tab = { id: prossimoId++, tipo: "run", titolo: `Run · ${catena.nome}`, risultati: [], inCorso: true };
-    tabs.push(tab); tabAttivoId = tab.id;
-    logga("info", `Avvio catena "${catena.nome}" (${catena.passi.length} passi)`);
+    const grafo = !!catena.nodi?.length;
+    // In modalità grafo i passi servono a portare la config per-file (skip/catture).
+    const passi = grafo ? sincronizzaPassi(catena) : (catena.passi || []);
+    const cat = { ...catena, passi };
+    const id = prossimoId++;
+    tabs.push({ id, tipo: "run", titolo: `Run · ${catena.nome}`, risultati: [], inCorso: true });
+    tabAttivoId = id;
+    // Aggiorna il tab attraverso l'array reattivo (mutare l'oggetto locale non
+    // notificherebbe il proxy $state → i risultati non comparirebbero).
+    const aggiornaTab = (patch) => {
+      const i = tabs.findIndex((t) => t.id === id);
+      if (i >= 0) tabs[i] = { ...tabs[i], ...patch };
+    };
+    logga("info", `Avvio ${grafo ? "flusso" : "catena"} "${catena.nome}" (${grafo ? cat.nodi.length + " nodi" : passi.length + " passi"})`);
     try {
-      tab.risultati = await eseguiCatena(catena, $state.snapshot(albero), variabiliAttive || {});
-      const ok = tab.risultati.filter((r) => r.ok).length;
-      logga(ok === tab.risultati.length ? "ok" : "errore",
-        `Catena "${catena.nome}": ${ok}/${tab.risultati.length} passi ok`);
+      const risultati = grafo
+        ? await eseguiGrafo(cat, $state.snapshot(albero), variabiliAttive || {})
+        : await eseguiCatena(cat, $state.snapshot(albero), variabiliAttive || {});
+      aggiornaTab({ risultati, inCorso: false });
+      const ok = risultati.filter((r) => r.ok).length;
+      logga(ok === risultati.length ? "ok" : "errore",
+        `Catena "${catena.nome}": ${ok}/${risultati.length} passi ok`);
     } catch (e) {
-      tab.risultati = [{ nome: "errore", ok: false, errore: String(e), tests: [], logs: [] }];
+      aggiornaTab({ risultati: [{ nome: "errore", ok: false, errore: String(e), tests: [], logs: [] }], inCorso: false });
       logga("errore", `Catena fallita: ${e}`);
-    } finally {
-      tab.inCorso = false;
     }
   }
 
@@ -769,10 +824,10 @@
 <div class="app">
   <Titlebar />
   <div class="body" style="grid-template-columns: 48px {layout.sidebar}px 5px 1fr">
-    <Rail {vista} onCambiaVista={(v) => (vista = v)} />
+    <Rail {vista} onCambiaVista={cambiaVista} />
 
     <div class="sidebar">
-      {#if vista === "collezioni"}
+      {#if vista === "collezioni" || vista === "dashboard"}
         <CollectionsView
           {albero}
           {percorsoWs}
@@ -799,7 +854,7 @@
           onImportaWs={importaWs}
         />
       {:else if vista === "run"}
-        <RunView {albero} onEsegui={eseguiRun} />
+        <RunView onApriCanvas={apriWorkflow} segnale={segnaleRun} />
       {:else if vista === "storia"}
         <HistoryView
           {storia}
@@ -850,7 +905,14 @@
 
       <!-- Contenuto del tab attivo -->
       <div class="center-main">
-        {#if !tabAttivo}
+        {#if !tabAttivo && vista === "dashboard"}
+          <DashboardView
+            {albero} {environments} {storia} {catene}
+            onNuovaRichiesta={() => (vista = "collezioni")}
+            onApri={apriDaStoria}
+            onVaiA={cambiaVista}
+          />
+        {:else if !tabAttivo}
           <div class="center-vuoto">Apri una richiesta dalle Collections.</div>
         {:else if tabAttivo.tipo === "diff"}
           <DiffView titolo={tabAttivo.titolo} righe={tabAttivo.righe} />
@@ -860,6 +922,15 @@
           {:else}
             <RunResults titolo={tabAttivo.titolo} risultati={tabAttivo.risultati} />
           {/if}
+        {:else if tabAttivo.tipo === "workflow"}
+          {#key tabAttivo.id}
+            <Workflow
+              catena={tabAttivo.catena}
+              {albero}
+              onSalva={(c) => salvaWorkflow(tabAttivo, c)}
+              onEsegui={eseguiRun}
+            />
+          {/key}
         {:else if tabAttivo.tipo === "cartella"}
           <FolderConfig
             dir={tabAttivo.dir}

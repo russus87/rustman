@@ -140,7 +140,7 @@
   .esito { font-family: var(--mono); font-size: 11.5px; color: var(--txt-dim); white-space: pre-wrap; }
   .msg { background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; color: var(--txt); font-family: var(--sans); font-size: 12.5px; padding: 8px 10px; resize: none; height: 54px; outline: none; }
   .msg:focus { border-color: var(--accent); }
-  .commit { background: linear-gradient(145deg,#8b6dff,#6c47ff); color: #fff; border: none; border-radius: 8px; padding: 9px; font-weight: 600; cursor: pointer; }
+  .commit { background: linear-gradient(145deg,var(--accent-2),var(--accent)); color: #fff; border: none; border-radius: 8px; padding: 9px; font-weight: 600; cursor: pointer; }
   .commit:disabled { opacity: .55; cursor: default; }
   .lista-h { padding: 10px 14px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .6px; color: var(--txt-faint); }
   .lista { overflow-y: auto; padding: 0 8px; }
