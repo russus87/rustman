@@ -5,11 +5,14 @@
 use crate::curl;
 use crate::model::{Header, Richiesta};
 
-/// Genera lo snippet per il linguaggio indicato ("curl" | "fetch" | "python").
+/// Genera lo snippet per il linguaggio indicato
+/// ("curl" | "fetch" | "python" | "java" | "csharp").
 pub fn genera(r: &Richiesta, linguaggio: &str) -> String {
     match linguaggio {
         "fetch" => fetch(r),
         "python" => python(r),
+        "java" => java(r),
+        "csharp" => csharp(r),
         _ => curl::genera(r),
     }
 }
@@ -102,6 +105,52 @@ fn python(r: &Richiesta) -> String {
         out.push_str(&format!(", data={}", py_str(&r.body)));
     }
     out.push_str(")\nprint(resp.status_code)\nprint(resp.json())");
+    out
+}
+
+// Java 11+ (java.net.http). Le stringhe usano lo stesso escaping di JS.
+fn java(r: &Richiesta) -> String {
+    let mut out = String::from("import java.net.URI;\nimport java.net.http.*;\n\n");
+    out.push_str("HttpClient client = HttpClient.newHttpClient();\n");
+    out.push_str("HttpRequest request = HttpRequest.newBuilder()\n");
+    out.push_str(&format!("    .uri(URI.create({}))\n", js_str(&url_con_query(r))));
+    let body_pub = if !r.body.is_empty() && r.body_mode == "raw" {
+        format!("HttpRequest.BodyPublishers.ofString({})", js_str(&r.body))
+    } else {
+        "HttpRequest.BodyPublishers.noBody()".to_string()
+    };
+    out.push_str(&format!("    .method({}, {})\n", js_str(&r.metodo), body_pub));
+    for (k, v) in headers_effettivi(r) {
+        out.push_str(&format!("    .header({}, {})\n", js_str(&k), js_str(&v)));
+    }
+    out.push_str("    .build();\n");
+    out.push_str("HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());\n");
+    out.push_str("System.out.println(response.statusCode());\nSystem.out.println(response.body());");
+    out
+}
+
+// C# (System.Net.Http, async). TryAddWithoutValidation evita i vincoli sugli header di contenuto.
+fn csharp(r: &Richiesta) -> String {
+    let mut out = String::from("using System;\nusing System.Net.Http;\n\n");
+    out.push_str("var client = new HttpClient();\n");
+    out.push_str(&format!(
+        "var request = new HttpRequestMessage(new HttpMethod({}), {});\n",
+        js_str(&r.metodo),
+        js_str(&url_con_query(r))
+    ));
+    if !r.body.is_empty() && r.body_mode == "raw" {
+        out.push_str(&format!("request.Content = new StringContent({});\n", js_str(&r.body)));
+    }
+    for (k, v) in headers_effettivi(r) {
+        out.push_str(&format!(
+            "request.Headers.TryAddWithoutValidation({}, {});\n",
+            js_str(&k),
+            js_str(&v)
+        ));
+    }
+    out.push_str("var response = await client.SendAsync(request);\n");
+    out.push_str("Console.WriteLine((int)response.StatusCode);\n");
+    out.push_str("Console.WriteLine(await response.Content.ReadAsStringAsync());");
     out
 }
 

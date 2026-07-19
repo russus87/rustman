@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<title>Rustman — Brochure &amp; Documentazione</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+  :root{
+    --rust:#f74c00; --rust-2:#ff7a3c; --rust-strong:#d63f00;
+    --ink:#16181d; --body:#33373f; --muted:#6b7180; --line:#e4e7ee; --line-2:#d3d8e2;
+    --soft:#fff3ec; --panel:#f7f8fb; --code-bg:#0f1017; --code-tx:#e7e7ee;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body{ font-family:var(--sans); color:var(--body); font-size:10.5pt; line-height:1.55; }
+  h1,h2,h3,h4{ color:var(--ink); line-height:1.2; }
+  p{ margin:0 0 8px; }
+  a{ color:var(--rust-strong); text-decoration:none; }
+  code{ font-family:var(--mono); font-size:.9em; background:var(--soft); color:var(--rust-strong); padding:1px 5px; border-radius:4px; }
+  strong{ color:var(--ink); }
+  img{ max-width:100%; display:block; }
+
+  .page-break{ break-before:page; }
+  section{ margin-top:22px; }
+  .eyebrow{ color:var(--rust); font-weight:800; font-size:8.5pt; letter-spacing:.14em; text-transform:uppercase; }
+  h2{ font-size:19pt; letter-spacing:-.3px; margin:4px 0 6px; }
+  h3{ font-size:13pt; margin:20px 0 6px; }
+  h4{ font-size:11pt; margin:14px 0 4px; }
+  .lead{ color:var(--muted); font-size:11pt; }
+  .muted{ color:var(--muted); }
+
+  /* Cover */
+  .cover{ height:calc(100vh - 31mm); display:flex; flex-direction:column; }
+  .cover .brandrow{ display:flex; align-items:center; gap:12px; }
+  .logo{ width:52px;height:52px;border-radius:14px; background:linear-gradient(145deg,var(--rust-2),var(--rust-strong)); color:#fff; display:flex;align-items:center;justify-content:center; font-weight:800; font-size:26px; box-shadow:0 8px 22px rgba(247,76,0,.28); }
+  .cover h1{ font-size:44pt; letter-spacing:-1.5px; margin:26px 0 4px; }
+  .cover h1 .g{ background:linear-gradient(120deg,var(--rust),#ff9a5e); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .cover .sub{ font-size:13.5pt; color:var(--muted); max-width:15cm; }
+  .badges{ display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+  .badge{ font-size:8.5pt; font-weight:700; background:var(--soft); color:var(--rust-strong); border:1px solid #ffd9c4; border-radius:999px; padding:4px 11px; }
+  .cover .shot{ margin-top:auto; }
+  .cover .foot{ margin-top:14px; color:var(--muted); font-size:9pt; font-family:var(--mono); display:flex; gap:10px; }
+
+  .figure{ margin:12px 0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); break-inside:avoid; }
+  .figure img{ width:100%; }
+  .figure figcaption{ padding:8px 12px; font-size:8.6pt; color:var(--muted); border-top:1px solid var(--line); }
+  .figure figcaption b{ color:var(--ink); }
+
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+  .card{ border:1px solid var(--line); border-radius:11px; padding:11px 13px; break-inside:avoid; }
+  .card .ic{ font-size:15pt; }
+  .card h4{ margin:6px 0 3px; }
+  .card p{ font-size:9.4pt; color:var(--muted); margin:0; }
+
+  .callout{ background:var(--soft); border:1px solid #ffd9c4; border-left:4px solid var(--rust); border-radius:8px; padding:9px 12px; margin:10px 0; font-size:9.6pt; break-inside:avoid; }
+  .callout b{ color:var(--rust-strong); }
+
+  pre.code{ background:var(--code-bg); color:var(--code-tx); border-radius:10px; padding:12px 14px; font-family:var(--mono); font-size:8.7pt; line-height:1.6; overflow-x:auto; white-space:pre-wrap; break-inside:avoid; margin:8px 0; }
+  pre.code .c{ color:#7c8093; } pre.code .k{ color:var(--rust-2); } pre.code .s{ color:#8fd694; }
+
+  ul.checks{ list-style:none; margin:6px 0; padding:0; }
+  ul.checks li{ padding-left:20px; position:relative; margin:5px 0; font-size:9.8pt; }
+  ul.checks li::before{ content:"✓"; position:absolute; left:0; color:var(--rust); font-weight:800; }
+
+  table.spec{ width:100%; border-collapse:collapse; font-size:9.2pt; margin:8px 0; break-inside:avoid; }
+  table.spec th,table.spec td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.spec th{ color:var(--ink); font-size:8.4pt; text-transform:uppercase; letter-spacing:.05em; }
+  table.spec td code{ background:none; padding:0; }
+
+  .toc{ columns:2; column-gap:24px; font-size:9.6pt; }
+  .toc a{ color:var(--body); display:block; padding:3px 0; border-bottom:1px dotted var(--line); }
+  .toc .n{ color:var(--rust); font-weight:700; margin-right:6px; }
+
+  .diagram{ margin:10px 0; text-align:center; break-inside:avoid; }
+  .diagram svg{ max-width:100%; }
+  .dcap{ font-size:8.6pt; color:var(--muted); margin-top:4px; }
+
+  .parthead{ border-top:3px solid var(--rust); padding-top:8px; margin-top:8px; }
+  .kicker{ font-size:9pt; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<div class="cover">
+  <div class="brandrow">
+    <div class="logo">R</div>
+    <div><div style="font-weight:800;font-size:15pt;color:var(--ink)">Rustman</div><div class="muted" style="font-size:9pt">Client API · Rust · Tauri · Svelte</div></div>
+  </div>
+  <h1>Il client API con<br/><span class="g">workflow visuali</span></h1>
+  <p class="sub">Ispirato a Postman, scritto in Rust. Veloce, leggero, con Git integrato e un canvas a nodi per costruire i test d'integrazione come un grafo — con rami condizionali e merge reali.</p>
+  <div class="badges">
+    <span class="badge">v1.1.0</span><span class="badge">Desktop &amp; Web</span>
+    <span class="badge">Linux · Windows · macOS</span><span class="badge">Open source · MIT</span>
+  </div>
+  <div class="shot">
+    <div class="figure" style="margin-bottom:0"><img src="img/hero-workflow.png" alt="Canvas dei flussi" /></div>
+    <div class="foot"><span>github.com/russus87/rustman</span><span>·</span><span>Brochure &amp; Documentazione</span></div>
+  </div>
+</div>
+
+<!-- ================= PARTE 1 — PROMOZIONALE ================= -->
+<section class="page-break parthead">
+  <div class="eyebrow">Parte 1 — Panoramica</div>
+  <h2>Un client API completo, in un binario nativo</h2>
+  <p class="lead">Rustman unisce la comodità di un client API moderno alla velocità di Rust e Tauri. Le collezioni sono file JSON versionabili con Git, gli ambienti gestiscono variabili e segreti, e lo stesso motore che gira nell'app esegue le suite in CI da riga di comando.</p>
+</section>
+
+<section>
+  <h3>Perché Rustman</h3>
+  <div class="grid">
+    <div class="card"><div class="ic">🕸</div><h4>Workflow a nodi</h4><p>Costruisci catene di chiamate su un canvas: rami condizionali sugli archi, cattura di variabili e merge, con esecuzione a grafo.</p></div>
+    <div class="card"><div class="ic">📊</div><h4>Dashboard</h4><p>Home con KPI del workspace, attività recente e distribuzione dei metodi HTTP a colpo d'occhio.</p></div>
+    <div class="card"><div class="ic">🔀</div><h4>Git integrato</h4><p>Commit, diff, cronologia e remote con pull/push direttamente sul workspace delle collezioni.</p></div>
+    <div class="card"><div class="ic">✅</div><h4>Test &amp; contract</h4><p>Asserzioni su status/JSON/JSONPath, JSON Schema, snapshot/golden testing e script <code>pm.*</code>.</p></div>
+    <div class="card"><div class="ic">⚡</div><h4>Performance</h4><p>Test di carico a durata/RPS con warmup, grafici e gate SLO su p95 ed error-rate.</p></div>
+    <div class="card"><div class="ic">🧩</div><h4>Code-gen multi-lingua</h4><p>Genera lo snippet della richiesta in cURL, fetch (JS), Python, <strong>Java</strong> e <strong>C#</strong>.</p></div>
+    <div class="card"><div class="ic">🔌</div><h4>GraphQL · WS · SSE</h4><p>Editor GraphQL con introspezione, console WebSocket e stream di eventi Server-Sent Events.</p></div>
+    <div class="card"><div class="ic">📦</div><h4>Import / export</h4><p>Postman, OpenAPI/Swagger, cURL e HAR. Mock server e generatore di documentazione HTML.</p></div>
+  </div>
+</section>
+
+<section>
+  <h3>Tutto il workspace a colpo d'occhio</h3>
+  <p>La Home riassume collezioni, richieste, ambienti e flussi, con l'attività recente e la distribuzione dei metodi. L'accento è personalizzabile a runtime (Rust, Verde, Viola o un colore a scelta).</p>
+  <figure class="figure"><img src="img/dashboard.png" alt="Dashboard" /><figcaption><b>Dashboard.</b> KPI del workspace, attività recente con esito e barre per metodo HTTP.</figcaption></figure>
+</section>
+
+<!-- ================= PARTE 2 — DOCUMENTAZIONE ================= -->
+<section class="page-break parthead">
+  <div class="eyebrow">Parte 2 — Documentazione d'uso</div>
+  <h2>Guida completa a Rustman</h2>
+  <p class="kicker">Concetti, esempi e diagrammi per usare ogni funzione del software.</p>
+  <div class="toc" style="margin-top:12px">
+    <a href="#arch"><span class="n">1</span>Architettura</a>
+    <a href="#base"><span class="n">2</span>Workspace, collezioni, richieste</a>
+    <a href="#env"><span class="n">3</span>Ambienti e variabili</a>
+    <a href="#req"><span class="n">4</span>Anatomia di una richiesta</a>
+    <a href="#code"><span class="n">5</span>Generazione codice</a>
+    <a href="#flow"><span class="n">6</span>Il canvas dei flussi</a>
+    <a href="#exec"><span class="n">7</span>Esecuzione e risultati</a>
+    <a href="#test"><span class="n">8</span>Test e asserzioni</a>
+    <a href="#cli"><span class="n">9</span>CLI &amp; CI</a>
+    <a href="#more"><span class="n">10</span>Altre funzioni</a>
+  </div>
+</section>
+
+<!-- 1. Architettura -->
+<section id="arch">
+  <div class="eyebrow">01</div><h3 style="margin-top:2px">Architettura</h3>
+  <p>Rustman è un monorepo: la logica vive in un core Rust riutilizzato da tre "guscі" (desktop, web, CLI). Il frontend Svelte è identico su desktop e web — cambia solo il trasporto verso il backend.</p>
+  <div class="diagram">
+    <svg width="560" height="230" viewBox="0 0 560 230" xmlns="http://www.w3.org/2000/svg" font-family="var(--sans)">
+      <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b9bfcb"/></marker></defs>
+      <!-- core -->
+      <rect x="210" y="92" width="140" height="46" rx="11" fill="#fff3ec" stroke="#f74c00" stroke-width="2"/>
+      <text x="280" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#d63f00">core (Rust)</text>
+      <text x="280" y="128" text-anchor="middle" font-size="8.5" fill="#6b7180">HTTP · storage · git · test · perf</text>
+      <!-- gusci -->
+      <g font-size="10.5" fill="#16181d" font-weight="600">
+        <rect x="20"  y="20" width="150" height="40" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="95" y="45" text-anchor="middle">src-tauri (desktop)</text>
+        <rect x="205" y="12" width="150" height="40" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="280" y="37" text-anchor="middle">server (Axum · web)</text>
+        <rect x="390" y="20" width="150" height="40" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="465" y="45" text-anchor="middle">cli (rustman)</text>
+        <rect x="180" y="180" width="200" height="40" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="280" y="205" text-anchor="middle">frontend Svelte 5</text>
+      </g>
+      <g stroke="#b9bfcb" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+        <path d="M95,60 L250,92"/><path d="M280,52 L280,90"/><path d="M465,60 L310,92"/>
+        <path d="M280,180 L280,140"/>
+      </g>
+    </svg>
+    <div class="dcap">Il <code>core</code> è condiviso: la stessa logica alimenta app desktop, server web e CLI. Il frontend parla al backend via comandi Tauri (desktop) o REST <code>/api</code> (web).</div>
+  </div>
+</section>
+
+<!-- 2. Base -->
+<section id="base">
+  <div class="eyebrow">02</div><h3 style="margin-top:2px">Workspace, collezioni, richieste</h3>
+  <p>Un <strong>workspace</strong> è una cartella. Ogni <strong>collezione</strong> è una sottocartella con <strong>richieste</strong> salvate come file <code>.json</code> (anche in cartelle annidate). Essendo file di testo, tutto è versionabile con Git.</p>
+  <pre class="code"><span class="c"># struttura tipica di un workspace</span>
+workspace/
+  Anvil/                 <span class="c"># una collezione</span>
+    crea-progetto.json
+    cerca-progetti.json
+  environments/          <span class="c"># ambienti</span>
+    anvil.json
+  runs/                  <span class="c"># flussi (workflow)</span>
+    anvil-crea-verifica.json
+  .rustman-secrets.json  <span class="c"># segreti, gitignorati</span></pre>
+  <div class="callout"><b>Segreti al sicuro.</b> Le variabili marcate come segrete non finiscono nei file committati: vengono salvate a parte in <code>.rustman-secrets.json</code>, che è gitignorato.</div>
+</section>
+
+<!-- 3. Ambienti -->
+<section id="env">
+  <div class="eyebrow">03</div><h3 style="margin-top:2px">Ambienti e variabili</h3>
+  <p>Le variabili si richiamano con la sintassi <code>{{nome}}</code> in URL, header, query e body. Un ambiente (es. <em>staging</em>, <em>prod</em>) definisce i valori; puoi cambiarlo al volo. Esistono anche variabili <strong>dinamiche</strong> e <strong>faker</strong>.</p>
+  <table class="spec">
+    <tr><th>Tipo</th><th>Esempi</th><th>Uso</th></tr>
+    <tr><td>Ambiente</td><td><code>{{baseUrl}}</code> · <code>{{apiKey}}</code></td><td>Valori per-ambiente, con segreti</td></tr>
+    <tr><td>Dinamiche</td><td><code>{{$timestamp}}</code> · <code>{{$randomUUID}}</code> · <code>{{$randomInt}}</code></td><td>Generate all'invio</td></tr>
+    <tr><td>Faker</td><td><code>{{$name}}</code> · <code>{{$email}}</code></td><td>Dati finti realistici</td></tr>
+    <tr><td>Catturate</td><td><code>{{projectId}}</code></td><td>Estratte dalle risposte nei flussi</td></tr>
+  </table>
+</section>
+
+<!-- 4. Richiesta -->
+<section id="req">
+  <div class="eyebrow">04</div><h3 style="margin-top:2px">Anatomia di una richiesta</h3>
+  <p>L'editor organizza tutto in schede: <strong>Params</strong>, <strong>Headers</strong>, <strong>Body</strong> (raw, form-data con upload, x-www-form-urlencoded), <strong>Auth</strong> (Bearer, Basic, OAuth 2.0), <strong>Rete</strong> (timeout, redirect, TLS, retry 429), <strong>Tests</strong>, <strong>Pre/Post-script</strong>, <strong>Codice</strong>, <strong>Note</strong> ed <strong>Esempi</strong>.</p>
+  <div class="diagram">
+    <svg width="560" height="96" viewBox="0 0 560 96" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f74c00"/></marker></defs>
+      <g font-size="10" font-weight="600" fill="#16181d">
+        <rect x="6"   y="34" width="96" height="34" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="54"  y="55" text-anchor="middle">Pre-script</text>
+        <rect x="130" y="34" width="80" height="34" rx="9" fill="#fff3ec" stroke="#f74c00"/><text x="170" y="55" text-anchor="middle">Invio</text>
+        <rect x="238" y="34" width="80" height="34" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="278" y="55" text-anchor="middle">Test</text>
+        <rect x="346" y="34" width="96" height="34" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="394" y="55" text-anchor="middle">Post-script</text>
+        <rect x="470" y="34" width="84" height="34" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="512" y="55" text-anchor="middle">Cattura</text>
+      </g>
+      <g stroke="#f74c00" stroke-width="1.6" fill="none" marker-end="url(#ar2)">
+        <path d="M102,51 L128,51"/><path d="M210,51 L236,51"/><path d="M318,51 L344,51"/><path d="M442,51 L468,51"/>
+      </g>
+    </svg>
+    <div class="dcap">Ciclo di vita di un passo: lo script pre può modificare richiesta e variabili; dopo la risposta si valutano test e script post, poi le catture salvano valori in variabili.</div>
+  </div>
+</section>
+
+<!-- 5. Codice -->
+<section id="code" class="page-break">
+  <div class="eyebrow">05</div><h3 style="margin-top:2px">Generazione codice</h3>
+  <p>La scheda <strong>Codice</strong> mostra la richiesta corrente tradotta in cinque linguaggi, pronta da copiare. Header, autenticazione, query e body vengono riportati fedelmente.</p>
+  <figure class="figure"><img src="img/codice.png" alt="Scheda Codice" /><figcaption><b>Scheda Codice.</b> Selettore lingua (cURL · fetch · Python · Java · C#), anteprima e copia con un click.</figcaption></figure>
+  <h4>Esempio — la stessa richiesta in Java e C#</h4>
+  <pre class="code"><span class="c">// Java 11+ (java.net.http)</span>
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create(<span class="s">"{{baseUrl}}/projects"</span>))
+    .method(<span class="s">"POST"</span>, HttpRequest.BodyPublishers.ofString(body))
+    .header(<span class="s">"Authorization"</span>, <span class="s">"Bearer {{apiKey}}"</span>)
+    .build();</pre>
+  <pre class="code"><span class="c">// C# (System.Net.Http)</span>
+<span class="k">var</span> request = <span class="k">new</span> HttpRequestMessage(<span class="k">new</span> HttpMethod(<span class="s">"POST"</span>), <span class="s">"{{baseUrl}}/projects"</span>);
+request.Content = <span class="k">new</span> StringContent(body);
+request.Headers.TryAddWithoutValidation(<span class="s">"Authorization"</span>, <span class="s">"Bearer {{apiKey}}"</span>);</pre>
+</section>
+
+<!-- 6. Flussi -->
+<section id="flow" class="page-break">
+  <div class="eyebrow">06</div><h3 style="margin-top:2px">Il canvas dei flussi</h3>
+  <p>Un <strong>flusso</strong> è un test d'integrazione visuale: una catena di richieste disegnata come grafo. Si apre nel canvas dalla sezione <strong>FLUSSI</strong>; ogni nodo è una richiesta della collezione, collegata da archi.</p>
+  <figure class="figure"><img src="img/canvas.png" alt="Canvas di un flusso" /><figcaption><b>Canvas.</b> Da <em>Start</em> si esegue lungo gli archi. Qui un ramo prosegue se <code>status == 200</code>, l'altro fa il rollback.</figcaption></figure>
+
+  <h4>Rami condizionali e merge</h4>
+  <p>Cliccando un <strong>arco</strong> puoi imporgli una condizione (su <code>status</code>, un campo <code>json</code> o una <code>var</code>): l'arco viene percorso solo se è vera. Più archi in uscita = biforcazione; più archi in entrata sullo stesso nodo = merge (il nodo gira una sola volta).</p>
+  <div class="diagram">
+    <svg width="520" height="150" viewBox="0 0 520 150" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#b9bfcb"/></marker></defs>
+      <g font-size="10" font-weight="600">
+        <rect x="6"   y="60" width="70" height="32" rx="16" fill="#fff3ec" stroke="#f74c00"/><text x="41" y="80" text-anchor="middle" fill="#d63f00">Start</text>
+        <rect x="120" y="58" width="96" height="36" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="168" y="80" text-anchor="middle" fill="#16181d">Crea</text>
+        <rect x="270" y="14" width="110" height="36" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="325" y="36" text-anchor="middle" fill="#16181d">Aggiorna</text>
+        <rect x="270" y="100" width="110" height="36" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="325" y="122" text-anchor="middle" fill="#16181d">Rollback</text>
+        <rect x="430" y="58" width="84" height="36" rx="9" fill="#f7f8fb" stroke="#d3d8e2"/><text x="472" y="80" text-anchor="middle" fill="#16181d">Notifica</text>
+      </g>
+      <g stroke="#b9bfcb" stroke-width="1.6" fill="none" marker-end="url(#ar3)">
+        <path d="M76,76 L118,76"/>
+        <path d="M216,68 C245,50 250,36 268,32"/>
+        <path d="M216,84 C245,102 250,116 268,118"/>
+        <path d="M380,32 C405,40 410,58 428,68"/>
+        <path d="M380,118 C405,110 410,92 428,84"/>
+      </g>
+      <g font-size="8" font-family="var(--mono)" fill="#d63f00">
+        <text x="238" y="40">status==200</text><text x="236" y="120">status!=200</text>
+      </g>
+    </svg>
+    <div class="dcap">Branch sulle uscite di <em>Crea</em>, merge sulle entrate di <em>Notifica</em>. L'esecuzione segue un ordine topologico e i rami non presi risultano <b>SKIP</b>.</div>
+  </div>
+
+  <h4>Inspector di nodo</h4>
+  <p>Cliccando un <strong>nodo</strong> si apre il pannello di configurazione: <strong>cattura variabili</strong> (estrai un valore dalla risposta e salvalo, es. <code>projectId ← json.id</code>), comportamento <strong>al fallimento</strong> (ferma / continua) e <strong>skip</strong> condizionale.</p>
+  <figure class="figure"><img src="img/inspector.png" alt="Inspector di nodo" /><figcaption><b>Inspector di nodo.</b> Catture, gestione del fallimento e condizione di skip — tutto sul canvas.</figcaption></figure>
+
+  <div class="callout"><b>Guida integrata.</b> Il pulsante <b>ⓘ</b> in alto apre una guida passo-passo direttamente nel canvas.</div>
+  <figure class="figure"><img src="img/guida.png" alt="Guida del canvas" /><figcaption><b>Guida del canvas.</b> Aggiungere passi, collegare, rami, configurazione nodo, esecuzione e scorciatoie.</figcaption></figure>
+</section>
+
+<!-- 7. Esecuzione -->
+<section id="exec" class="page-break">
+  <div class="eyebrow">07</div><h3 style="margin-top:2px">Esecuzione e risultati</h3>
+  <p>Il pulsante <strong>▶ Esegui</strong> salva e lancia il flusso; i risultati si aprono in una scheda dedicata, passo per passo, con status, tempo e test. I nodi non raggiunti (rami non presi) sono marcati <strong>SKIP</strong>.</p>
+  <figure class="figure"><img src="img/run.png" alt="Risultati di esecuzione" /><figcaption><b>Risultati.</b> Esito per passo con status e tempi; export in CSV/JSON. Qui un ramo è stato saltato correttamente.</figcaption></figure>
+</section>
+
+<!-- 8. Test -->
+<section id="test">
+  <div class="eyebrow">08</div><h3 style="margin-top:2px">Test e asserzioni</h3>
+  <p>Ogni richiesta può avere asserzioni dichiarative (status, tempo, header, body, JSON, JSONPath, JSON Schema) e script <code>pm.*</code> in stile Postman. Le stesse verifiche girano nella CLI.</p>
+  <pre class="code"><span class="c">// Post-script: salva il token e verifica lo status</span>
+<span class="k">const</span> d = pm.response.json();
+pm.environment.set(<span class="s">"token"</span>, d.token);
+pm.test(<span class="s">"status 200"</span>, () =&gt; pm.expect(pm.response.code).to.equal(<span class="s">200</span>));</pre>
+  <ul class="checks">
+    <li>Asserzioni <code>schema</code> (JSON Schema), inferibili dalla risposta o dall'import OpenAPI</li>
+    <li>Snapshot / golden testing con ignore-paths e approvazione della baseline</li>
+    <li>Security scan delle risposte: header di sicurezza, CORS, info leak, cookie</li>
+  </ul>
+</section>
+
+<!-- 9. CLI -->
+<section id="cli">
+  <div class="eyebrow">09</div><h3 style="margin-top:2px">CLI &amp; CI</h3>
+  <p>L'eseguitore headless <code>rustman run</code> lancia collezioni e flussi, valuta le asserzioni ed esce con codice ≠ 0 al fallimento. Lo stesso motore a grafo dell'app vale in pipeline.</p>
+  <pre class="code"><span class="c"># esegui un flusso a nodi con report JUnit</span>
+<span class="k">rustman</span> run ./workspace --chain <span class="s">"Anvil — Crea e verifica progetto"</span> --junit report.xml
+
+<span class="c"># test di carico con gate SLO (fallisce se p95 o error-rate sforano)</span>
+<span class="k">rustman</span> perf ./workspace --request Anvil/lista-progetti.json \
+  --duration 30 --concurrency 20 --rps 50 --max-p95 200 --max-error 1
+
+<span class="c"># copertura delle API rispetto a uno spec OpenAPI</span>
+<span class="k">rustman</span> coverage ./workspace --spec openapi.yaml</pre>
+  <ul class="checks">
+    <li>Run <strong>data-driven</strong> (<code>--data</code> CSV/JSON): un'iterazione per riga</li>
+    <li>Matrice di ambienti (<code>--envs staging,prod</code>) e gate del pass-rate</li>
+    <li>Mock server dallo spec OpenAPI o dalle snapshot registrate</li>
+  </ul>
+</section>
+
+<!-- 10. Altro -->
+<section id="more">
+  <div class="eyebrow">10</div><h3 style="margin-top:2px">Altre funzioni</h3>
+  <div class="grid">
+    <div class="card"><h4>GraphQL</h4><p>Editor query + variabili, esecuzione ed explorer dello schema via introspezione.</p></div>
+    <div class="card"><h4>WebSocket / SSE</h4><p>Console interattiva per inviare/ricevere messaggi e seguire stream di eventi live.</p></div>
+    <div class="card"><h4>Import</h4><p>Postman (Collection v2 + Environment), OpenAPI/Swagger 3.x e 2.0, cURL e HAR.</p></div>
+    <div class="card"><h4>Documentazione</h4><p>Generatore HTML dalle collezioni, con esempi di risposta salvati per richiesta.</p></div>
+    <div class="card"><h4>History &amp; diff</h4><p>Cronologia con replay, confronto fra due risposte e trend dei tempi per endpoint.</p></div>
+    <div class="card"><h4>Temi &amp; accento</h4><p>Chiaro/scuro/sistema, dimensione font e colore d'accento personalizzabile a runtime.</p></div>
+  </div>
+  <div class="callout" style="margin-top:16px"><b>Provalo.</b> Scarica l'ultima release per il tuo sistema da <b>github.com/russus87/rustman/releases</b> — Linux, Windows e macOS. Open source, licenza MIT.</div>
+</section>
+
+</body>
+</html>

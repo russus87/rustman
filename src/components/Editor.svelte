@@ -16,10 +16,38 @@
     onOttieniToken,
   } = $props();
 
-  let lingCodice = $state("curl");
+  import * as api from "../lib/api.js";
 
   let tab = $state("Body");
-  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Note", "Esempi"];
+  const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Codice", "Note", "Esempi"];
+
+  // ---- Generazione codice (tab "Codice") ----
+  let lingCodice = $state("curl");
+  const linguaggiCodice = [
+    { id: "curl", nome: "cURL" },
+    { id: "fetch", nome: "fetch (JS)" },
+    { id: "python", nome: "Python" },
+    { id: "java", nome: "Java" },
+    { id: "csharp", nome: "C#" },
+  ];
+  let codiceGenerato = $state("");
+  let copiato = $state(false);
+  // Rigenera lo snippet quando cambia lingua/richiesta e il tab Codice è aperto.
+  $effect(() => {
+    if (tab !== "Codice") return;
+    const snap = $state.snapshot(richiesta);
+    const ling = lingCodice;
+    api.generaCodice(snap, ling).then((c) => (codiceGenerato = c)).catch(() => (codiceGenerato = "// errore di generazione"));
+  });
+  async function copiaCodiceTab() {
+    try {
+      await navigator.clipboard.writeText(codiceGenerato);
+      copiato = true;
+      setTimeout(() => (copiato = false), 1400);
+    } catch {
+      onCopiaCodice?.(richiesta, lingCodice);
+    }
+  }
   const metodi = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
   // Anteprima dei {{segnaposto}} nell'URL: variabili d'ambiente risolte,
@@ -244,12 +272,6 @@
     <button class="btn btn-save" onclick={onSalva} disabled={!salvabile} title="Salva (Ctrl+S)">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save
     </button>
-    <select class="test-sel" bind:value={lingCodice} title="Linguaggio dello snippet">
-      <option value="curl">cURL</option>
-      <option value="fetch">fetch</option>
-      <option value="python">Python</option>
-    </select>
-    <button class="btn btn-save" onclick={() => onCopiaCodice?.(richiesta, lingCodice)} title="Copia come codice">Copia</button>
   </div>
   {#if richiesta.url.includes("{{")}
     <div class="url-preview" title="URL con le variabili risolte">→ {urlRisolto}</div>
@@ -454,10 +476,29 @@
       <textarea class="code-area" bind:value={richiesta.post_script} spellcheck="false"
         placeholder={'// es: salva il token e verifica lo status\nconst d = pm.response.json();\npm.environment.set("token", d.token);\npm.test("status 200", () => pm.expect(pm.response.code).to.equal(200));'}></textarea>
     </div>
+  {:else if tab === "Codice"}
+    <div class="codice-bar">
+      <div class="pill-group">
+        {#each linguaggiCodice as l}
+          <span class="pill" class:on={lingCodice === l.id} onclick={() => (lingCodice = l.id)}>{l.nome}</span>
+        {/each}
+      </div>
+      <div class="bt-spacer"></div>
+      <button class="btn btn-save" onclick={copiaCodiceTab}>{copiato ? "Copiato ✓" : "Copia"}</button>
+    </div>
+    <div class="code-wrap">
+      <pre class="codice-view">{codiceGenerato || "// …"}</pre>
+    </div>
   {/if}
 </div>
 
 <style>
+  /* Tab Codice */
+  .codice-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .codice-view {
+    margin: 0; padding: 16px 18px; font-family: var(--mono); font-size: 13px; line-height: 1.7;
+    color: var(--txt); white-space: pre; tab-size: 2;
+  }
   /* Riga di aiuto sopra gli editor di script */
   .script-aiuto {
     padding: 8px 16px;

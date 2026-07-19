@@ -2,6 +2,7 @@
 
 /* ====== Variabili colore (tema scuro premium) ====== */
 :root{
+  color-scheme: dark;      /* controlli nativi (select/option/scrollbar) in dark */
   --bg:#0c0c11;            /* sfondo finestra */
   --rail:#0a0a0e;          /* barra icone sinistra */
   --panel:#111118;         /* pannelli */
@@ -36,6 +37,7 @@
 
 /* ====== Tema chiaro ====== */
 :root[data-tema="light"]{
+  color-scheme: light;
   --bg:#f5f6f9;
   --rail:#e9ebf1;
   --panel:#ffffff;
@@ -68,7 +70,7 @@ body{
 /* --- Title bar --- */
 .titlebar{
   display:flex;align-items:center;gap:14px;
-  background:#0a0a0e;border-bottom:1px solid var(--border);
+  background:var(--rail);border-bottom:1px solid var(--border);
   padding:0 14px;user-select:none;
 }
 .brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}

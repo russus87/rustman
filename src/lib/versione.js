@@ -1,9 +1,17 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "1.1.0";
+export const VERSIONE = "1.1.1";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "1.1.1",
+    voci: [
+      "Nuova scheda Codice: snippet della richiesta in cURL, fetch, Python, Java e C#, con copia.",
+      "Leggibilità: dropdown nativi corretti in tema scuro e titolo dell'app in tema chiaro.",
+      "Brochure e documentazione in PDF (docs/rustman.pdf).",
+    ],
+  },
   {
     versione: "1.1.0",
     voci: [
