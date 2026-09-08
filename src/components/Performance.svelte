@@ -17,26 +17,147 @@
   let errore = $state(null);
   let ris = $state(null); // RisultatoPerf
   let grafico = $state("Latenza"); // Latenza | Istogramma
+  let avanz = $state(null); // ProgressoPerf mentre il test è in corso
+  let ultimeOpzioni = $state(null); // opzioni dell'ultimo test (per il report)
+  let esportando = $state(false);
+  let esitoExp = $state(null);
+
+  // L'invio del test è una singola chiamata che ritorna solo alla fine: per
+  // sapere a che punto siamo si interroga il backend, che tiene i contatori
+  // aggiornati mano a mano che le richieste si completano.
+  const INTERVALLO_MS = 250;
+  async function seguiAvanzamento() {
+    while (inCorso) {
+      try {
+        const p = await api.perfProgresso();
+        if (inCorso) avanz = p;
+      } catch { /* una lettura persa non è un problema: si riprova */ }
+      await new Promise((r) => setTimeout(r, INTERVALLO_MS));
+    }
+  }
 
   async function esegui() {
     inCorso = true;
     errore = null;
+    avanz = null;
+    esitoExp = null;
+    const opzioni = {
+      concorrenza: Number(concorrenza),
+      n: Number(n),
+      durata_s: modo === "durata" ? Number(durataS) : 0,
+      rps: Number(rps),
+      warmup_s: Number(warmupS),
+      profilo: modo === "durata" ? profilo : "costante",
+      spike_rps: Number(spikeRps),
+    };
+    seguiAvanzamento();
     try {
-      const opzioni = {
-        concorrenza: Number(concorrenza),
-        n: Number(n),
-        durata_s: modo === "durata" ? Number(durataS) : 0,
-        rps: Number(rps),
-        warmup_s: Number(warmupS),
-        profilo: modo === "durata" ? profilo : "costante",
-        spike_rps: Number(spikeRps),
-      };
       ris = await api.eseguiPerfCfg($state.snapshot(richiesta), opzioni, variabili);
+      ultimeOpzioni = { ...opzioni, modo, quando: new Date() };
     } catch (e) {
       errore = String(e);
       ris = null;
     } finally {
       inCorso = false;
+      avanz = null;
+    }
+  }
+
+  // Percentuale di avanzamento: sulle richieste nel modo "count", sul tempo
+  // nel modo "durata" (dove il totale non si conosce in anticipo).
+  const percentuale = $derived.by(() => {
+    if (!avanz) return 0;
+    if (avanz.previste > 0) return Math.min(100, (avanz.completate / avanz.previste) * 100);
+    if (avanz.totale_ms > 0) return Math.min(100, (avanz.trascorso_ms / avanz.totale_ms) * 100);
+    return 0;
+  });
+
+  // ---- Esportazioni ----
+  function scarica(nome, dati, tipo) {
+    const blob = dati instanceof Blob ? dati : new Blob([dati], { type: tipo });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+  function stampaData(d) {
+    return d ? d.toLocaleString("it-IT") : "";
+  }
+  // Righe "chiave: valore" della configurazione, condivise da CSV e PDF.
+  function parametri() {
+    const o = ultimeOpzioni;
+    if (!o) return [];
+    const p = [["Modo", o.modo === "durata" ? "Durata" : "N richieste"]];
+    if (o.modo === "durata") {
+      p.push(["Profilo", o.profilo], ["Durata (s)", String(o.durata_s)],
+        ["RPS target", o.rps ? String(o.rps) : "massimo"]);
+      if (o.profilo === "spike") p.push(["RPS picco", String(o.spike_rps)]);
+      p.push(["Warmup (s)", String(o.warmup_s)]);
+    } else {
+      p.push(["Richieste", String(o.n)]);
+    }
+    p.push(["Concorrenza", String(o.concorrenza)], ["Eseguito il", stampaData(o.quando)]);
+    return p;
+  }
+  function nomeFile(est) {
+    const base = (richiesta?.nome || "richiesta").replace(/[^\w.-]+/g, "-").toLowerCase();
+    const q = ultimeOpzioni?.quando ?? new Date();
+    const stamp = `${q.getFullYear()}${String(q.getMonth() + 1).padStart(2, "0")}${String(q.getDate()).padStart(2, "0")}-${String(q.getHours()).padStart(2, "0")}${String(q.getMinutes()).padStart(2, "0")}`;
+    return `perf-${base}-${stamp}.${est}`;
+  }
+
+  // CSV in due blocchi: prima il riepilogo, poi una riga per richiesta.
+  // È il formato che Excel e LibreOffice aprono senza chiedere nulla.
+  function esportaCsv() {
+    if (!ris) return;
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const righe = [["metrica", "valore"].map(esc).join(",")];
+    const riepilogo = [
+      ["richiesta", richiesta?.nome || ""],
+      ["metodo", richiesta?.metodo || ""],
+      ["url", richiesta?.url || ""],
+      ["richieste_totali", ris.totali],
+      ["ok", ris.ok],
+      ["errori", ris.errori],
+      ["durata_totale_ms", ris.durata_totale_ms],
+      ["req_al_secondo", ris.req_al_secondo.toFixed(2)],
+      ["latenza_min_ms", ris.latenza_min],
+      ["latenza_media_ms", ris.latenza_media.toFixed(2)],
+      ["latenza_max_ms", ris.latenza_max],
+      ["p50_ms", ris.p50], ["p90_ms", ris.p90], ["p95_ms", ris.p95], ["p99_ms", ris.p99],
+      ...parametri().map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]+/g, "_"), v]),
+    ];
+    for (const r of riepilogo) righe.push(r.map(esc).join(","));
+    righe.push("");
+    righe.push(["indice", "latenza_ms"].map(esc).join(","));
+    ris.latenze.forEach((l, i) => righe.push([i, l].map(esc).join(",")));
+    scarica(nomeFile("csv"), righe.join("\n"), "text/csv;charset=utf-8");
+    esitoExp = { ok: true, testo: "CSV esportato" };
+  }
+
+  // Il PDF (grafici inclusi) è generato dal backend e arriva in base64.
+  async function esportaPdf() {
+    if (!ris || esportando) return;
+    esportando = true;
+    esitoExp = null;
+    try {
+      const b64 = await api.esportaPerfPdf(
+        $state.snapshot(ris),
+        richiesta?.nome || "Richiesta",
+        `${richiesta?.metodo || ""} ${richiesta?.url || ""}`.trim(),
+        parametri(),
+      );
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      scarica(nomeFile("pdf"), new Blob([bytes], { type: "application/pdf" }));
+      esitoExp = { ok: true, testo: "PDF esportato" };
+    } catch (e) {
+      esitoExp = { ok: false, testo: `PDF non riuscito: ${e}` };
+    } finally {
+      esportando = false;
     }
   }
 
@@ -115,6 +236,32 @@
       </button>
     </div>
 
+    {#if inCorso && avanz}
+      <div class="avanz">
+        <div class="av-barra">
+          <!-- Nel modo "durata" la barra segue il tempo, non le richieste. -->
+          <div class="av-riemp" style="width:{percentuale.toFixed(1)}%"></div>
+        </div>
+        <div class="av-righe">
+          <span class="av-perc">{percentuale.toFixed(0)}%</span>
+          <span>
+            {avanz.completate.toLocaleString("it-IT")}
+            {#if avanz.previste > 0}/ {avanz.previste.toLocaleString("it-IT")}{/if}
+            richieste
+          </span>
+          <span class="av-ok">{avanz.ok.toLocaleString("it-IT")} ok</span>
+          {#if avanz.errori > 0}<span class="av-ko">{avanz.errori.toLocaleString("it-IT")} errori</span>{/if}
+          <span>{avanz.req_al_secondo.toFixed(1)} req/s</span>
+          <span>media {avanz.latenza_media.toFixed(0)} ms</span>
+          <span>ultima {avanz.latenza_ultima} ms</span>
+          <span class="av-t">
+            {(avanz.trascorso_ms / 1000).toFixed(1)}s
+            {#if avanz.totale_ms > 0}/ {(avanz.totale_ms / 1000).toFixed(0)}s{/if}
+          </span>
+        </div>
+      </div>
+    {/if}
+
     {#if errore}
       <div class="err-box">{errore}</div>
     {:else if !ris}
@@ -123,6 +270,18 @@
         <div>Imposta i parametri e premi <b>Esegui</b> sulla richiesta corrente.</div>
       </div>
     {:else}
+      <div class="exp-bar">
+        {#if esitoExp}
+          <span class="exp-esito" class:ko={!esitoExp.ok}>{esitoExp.testo}</span>
+        {/if}
+        <span class="exp-sp"></span>
+        <button class="exp-btn" onclick={esportaCsv} title="Riepilogo e latenze in CSV">Esporta CSV</button>
+        <button class="exp-btn" onclick={esportaPdf} disabled={esportando}
+          title="Report PDF con KPI, percentili e grafici">
+          {esportando ? "Genero…" : "Esporta PDF"}
+        </button>
+      </div>
+
       <!-- KPI principali -->
       <div class="kpi-grid">
         <div class="kpi"><div class="lbl">Richieste</div><div class="val">{ris.totali}</div></div>
@@ -199,6 +358,35 @@
 </div>
 
 <style>
+  /* Avanzamento del test in corso */
+  .avanz { margin-bottom: 16px; }
+  .av-barra {
+    height: 6px; border-radius: 3px; background: var(--panel-3); overflow: hidden;
+  }
+  .av-riemp {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width .2s linear;
+  }
+  .av-righe {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 8px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--txt-dim);
+  }
+  .av-perc { color: var(--txt); font-weight: 600; }
+  .av-ok { color: var(--green); }
+  .av-ko { color: var(--red); }
+  .av-t { margin-left: auto; color: var(--txt-faint); }
+  /* Barra delle esportazioni */
+  .exp-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .exp-sp { flex: 1; }
+  .exp-esito { font-size: 11.5px; color: var(--green); }
+  .exp-esito.ko { color: var(--red); }
+  .exp-btn {
+    background: var(--panel-2); color: var(--txt); border: 1px solid var(--border-2);
+    border-radius: 7px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  .exp-btn:hover:not(:disabled) { background: var(--panel-3); border-color: var(--accent-line); }
+  .exp-btn:disabled { opacity: .55; cursor: default; }
   .perf-form {
     display: flex;
     align-items: flex-end;

@@ -109,7 +109,7 @@
     const tab = {
       id: prossimoId++, tipo: "request", file: null, dir: "",
       collezione: "(history)", richiesta: r,
-      salvato: "", risposta: null, risultatiTest: [], inCorso: false, errore: null,
+      firma: null, salvatoSnap: null, risposta: null, risultatiTest: [], inCorso: false, errore: null,
     };
     tabs.push(tab); tabAttivoId = tab.id;
   }
@@ -131,7 +131,7 @@
     const tab = {
       id: prossimoId++, tipo: "request", file, dir,
       collezione: nomeCollezione(file), richiesta: r,
-      salvato: JSON.stringify(r), risposta: null, risultatiTest: [],
+      firma: firmaRichiesta(r), salvatoSnap: structuredClone(r), risposta: null, risultatiTest: [],
       inCorso: false, errore: null,
     };
     tabs.push(tab);
@@ -235,8 +235,7 @@
     const t = tabAttivo;
     if (!t || t.tipo !== "request") return;
     const attuale = JSON.stringify($state.snapshot(t.richiesta), null, 2);
-    let salvato = attuale;
-    try { salvato = JSON.stringify(JSON.parse(t.salvato), null, 2); } catch { salvato = ""; }
+    const salvato = t.salvatoSnap ? JSON.stringify(t.salvatoSnap, null, 2) : "";
     let righe = [];
     try { righe = await api.diffTesti(salvato, attuale); } catch (e) { console.error(e); }
     const tab = { id: prossimoId++, tipo: "diff", file: null, titolo: `Modifiche · ${t.richiesta.nome || "richiesta"}`, righe };
@@ -321,7 +320,7 @@
     r.auth ??= { tipo: "none", token: "", utente: "", password: "", oauth2: null };
     r.pre_script ??= ""; r.post_script ??= "";
     const tab = { id: prossimoId++, tipo: "request", file: null, dir: "", collezione: "(import)",
-      richiesta: r, salvato: "", risposta: null, risultatiTest: [], inCorso: false, errore: null };
+      richiesta: r, firma: null, salvatoSnap: null, risposta: null, risultatiTest: [], inCorso: false, errore: null };
     tabs.push(tab); tabAttivoId = tab.id;
     logga("ok", "Richiesta importata");
   }
@@ -474,8 +473,29 @@
     if (tabAttivoId === id) tabAttivoId = tabs.length ? tabs[Math.max(0, i - 1)].id : null;
   }
 
+  // Firma di una richiesta, usata per sapere se ha modifiche non salvate.
+  // I corpi (della richiesta e degli esempi) restano fuori dalla
+  // serializzazione: possono pesare molti MB e `dirty()` viene valutato a ogni
+  // render, quindi stringificarli allocherebbe megabyte a ogni battuta di
+  // tasto. Si confrontano a parte, dove `!==` tra stringhe è immediato se sono
+  // la stessa e si ferma al primo carattere diverso altrimenti.
+  function firmaRichiesta(r) {
+    const s = $state.snapshot(r);
+    const corpi = [s.body ?? ""];
+    s.body = "";
+    for (const e of s.esempi ?? []) { corpi.push(e.body ?? ""); e.body = ""; }
+    return { testa: JSON.stringify(s), corpi };
+  }
+
+  function firmeUguali(a, b) {
+    if (!a || !b || a.testa !== b.testa || a.corpi.length !== b.corpi.length) return false;
+    for (let i = 0; i < a.corpi.length; i++) if (a.corpi[i] !== b.corpi[i]) return false;
+    return true;
+  }
+
   function dirty(t) {
-    return t.tipo === "request" && JSON.stringify($state.snapshot(t.richiesta)) !== t.salvato;
+    if (t.tipo !== "request") return false;
+    return !firmeUguali(firmaRichiesta(t.richiesta), t.firma);
   }
 
   // ---------------- Azioni sul tab attivo ----------------
@@ -483,8 +503,12 @@
     const t = tabAttivo;
     if (!t || t.tipo !== "request" || !t.dir) return;
     try {
-      t.file = await api.salvaRichiesta(t.dir, t.file, $state.snapshot(t.richiesta));
-      t.salvato = JSON.stringify($state.snapshot(t.richiesta));
+      const snap = $state.snapshot(t.richiesta);
+      t.file = await api.salvaRichiesta(t.dir, t.file, snap);
+      // Firma e copia calcolate dallo snapshot inviato, non dallo stato
+      // attuale: durante l'await l'utente può aver già ripreso a scrivere.
+      t.salvatoSnap = snap;
+      t.firma = firmaRichiesta(snap);
       await ricaricaAlbero();
       segnaleGit++;
       logga("info", `Salvato ${t.file}`);
@@ -586,8 +610,8 @@
     if (!settings.autosave) return;
     const t = tabAttivo;
     if (!t || t.tipo !== "request" || !t.dir) return;
-    const snap = JSON.stringify($state.snapshot(t.richiesta)); // dipendenza
-    if (snap === t.salvato) return;
+    const f = firmaRichiesta(t.richiesta); // dipendenza reattiva
+    if (firmeUguali(f, t.firma)) return;
     const id = setTimeout(() => salva(), settings.autosaveMs);
     return () => clearTimeout(id);
   });
@@ -965,6 +989,7 @@
                 onSalva={salva}
                 onCopiaCodice={copiaCodice}
                 onOttieniToken={ottieniTokenOauth}
+                chiaveTab={tabAttivo.id}
               />
             </div>
             <Splitter direction="col" onResize={(d) => ridimensiona("right", -d, 280, 900)} />

@@ -8,6 +8,7 @@
   <Handle type="target" position={Position.Left} />
   <span class="m {data.classe}">{data.metodo || "?"}</span>
   <span class="nm">{data.label}</span>
+  {#if data.ciclo}<span class="ciclo" title="Questo nodo viene ripetuto">{data.ciclo}</span>{/if}
   <Handle type="source" position={Position.Right} />
 </div>
 
@@ -26,4 +27,10 @@
   .m.get { color: var(--green); } .m.post { color: #d9a441; }
   .m.put { color: var(--blue); } .m.del { color: var(--red); }
   .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Badge del ciclo: quante ripetizioni e con quale concorrenza. */
+  .ciclo {
+    margin-left: auto; flex-shrink: 0; font-size: 10.5px; font-family: var(--mono);
+    color: var(--accent-2); background: var(--accent-soft);
+    border: 1px solid var(--accent-line); border-radius: 5px; padding: 1px 5px;
+  }
 </style>

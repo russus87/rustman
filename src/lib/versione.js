@@ -1,9 +1,22 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "1.1.1";
+export const VERSIONE = "1.2.0";
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "1.2.0",
+    voci: [
+      "Nuovo editor del corpo richiesta (CodeMirror): numeri di riga, ricerca, folding e piega su JSON da decine di MB senza rallentare.",
+      "Formatta/Compatta il JSON su un thread separato: la finestra resta reattiva anche su corpi enormi.",
+      "↻ Loop sui nodi del flusso: N ripetizioni o una per elemento di un array, in sequenza o in concorrenza, con condizione di uscita. Anche da CLI.",
+      "Test di carico: avanzamento in tempo reale (richieste, req/s, latenza) mentre il test gira.",
+      "Esportazione del test di carico in CSV e in PDF con i grafici.",
+      "Anche il corpo della risposta (e gli esempi salvati) usano l'editor virtualizzato: niente più blocchi su risposte da decine di MB.",
+      "La configurazione di un nodo del flusso (loop, catture, skip) è ora sua e non della richiesta: due nodi sulla stessa richiesta non si sovrascrivono più.",
+      "Tab Run rifatto: confronto fra i nodi con loop (P50/P95/media e scarto percentuale), percentili e grafici per nodo, export CSV con la latenza di ogni giro e report PDF.",
+    ],
+  },
   {
     versione: "1.1.1",
     voci: [

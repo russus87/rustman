@@ -258,6 +258,12 @@ pub type Albero = Vec<Collezione>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Passo {
     pub file: String,
+    /// Id del nodo del grafo a cui questa configurazione appartiene. Due nodi
+    /// possono puntare alla stessa richiesta e avere impostazioni diverse.
+    /// Vuoto sui flussi salvati prima che i nodi avessero configurazione
+    /// propria: lì il passo si abbina ancora per `file`.
+    #[serde(default)]
+    pub nodo: String,
     /// Se presente, il passo viene eseguito solo se la condizione è vera
     /// (valutata sulla risposta del passo precedente o sulle variabili).
     #[serde(default)]
@@ -266,6 +272,40 @@ pub struct Passo {
     #[serde(default)]
     pub catture: Vec<Cattura>,
     /// Cosa fare se il passo fallisce: "stop" (default) o "continua".
+    #[serde(default)]
+    pub al_fallimento: String,
+    /// Ripetizione del passo; assente = una sola esecuzione.
+    #[serde(default)]
+    pub ciclo: Option<Ciclo>,
+}
+
+/// Ripetizione di un passo del flusso: la stessa richiesta viene rieseguita
+/// più volte, in sequenza o in concorrenza, con un'eventuale uscita anticipata.
+/// Dentro il giro sono disponibili le variabili `{{$loopIndex}}` (indice da 0),
+/// `{{$loopCount}}` (giri previsti) e, in modalità foreach, `{{$loopItem}}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ciclo {
+    /// "volte" = numero fisso di giri; "foreach" = un giro per elemento di un array.
+    #[serde(default)]
+    pub sorgente: String,
+    /// Giri da eseguire quando `sorgente` è "volte".
+    #[serde(default)]
+    pub volte: u32,
+    /// Path JSON dell'array su cui iterare quando `sorgente` è "foreach"
+    /// (valutato sulla risposta del nodo precedente, es. "data.items").
+    #[serde(default)]
+    pub lista: String,
+    /// Giri avviati in parallelo; 0 o 1 = uno dopo l'altro.
+    #[serde(default)]
+    pub concorrenza: u32,
+    /// Pausa fra un giro e il successivo, in ms (ignorata in concorrenza).
+    #[serde(default)]
+    pub ritardo_ms: u64,
+    /// Se presente, il ciclo termina appena diventa vera: valutata sulla
+    /// risposta del giro appena concluso.
+    #[serde(default)]
+    pub esci_se: Option<Condizione>,
+    /// Se un giro fallisce: "" ferma il ciclo, "continua" lo prosegue.
     #[serde(default)]
     pub al_fallimento: String,
 }
@@ -605,6 +645,29 @@ pub struct RisultatoPerf {
     pub p99: u128,
     /// Tutte le latenze (ms) in ordine di completamento, per i grafici.
     pub latenze: Vec<u128>,
+}
+
+/// Avanzamento di un test di carico mentre è ancora in corso: la UI lo
+/// interroga a intervalli per mostrare a che punto siamo senza attendere la
+/// fine. Nel modo "durata" conta anche le richieste di warmup, che non
+/// finiscono invece nelle statistiche finali.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProgressoPerf {
+    /// `false` quando nessun test è in esecuzione (o è appena finito).
+    pub in_corso: bool,
+    /// Richieste completate finora.
+    pub completate: usize,
+    /// Richieste previste; 0 nel modo "durata", dove non si sanno in anticipo.
+    pub previste: usize,
+    pub ok: usize,
+    pub errori: usize,
+    /// Millisecondi trascorsi dall'inizio del test.
+    pub trascorso_ms: u128,
+    /// Durata prevista in ms (warmup incluso); 0 nel modo "count".
+    pub totale_ms: u128,
+    pub req_al_secondo: f64,
+    pub latenza_media: f64,
+    pub latenza_ultima: u128,
 }
 
 /// Opzioni di un test di carico. Modo "count" (n richieste) o "durata" (per

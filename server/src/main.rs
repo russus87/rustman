@@ -5,12 +5,16 @@
 //! Poi apri http://localhost:1421
 
 use axum::{
-    extract::{Json, State},
+    extract::{DefaultBodyLimit, Json, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
     Router,
 };
+/// Tetto per il corpo delle chiamate /api: i JSON delle richieste possono
+/// pesare decine di MB, quindi il limite predefinito di Axum non basta.
+const LIMITE_CORPO: usize = 256 * 1024 * 1024;
+
 use rustman_core::{
     codegen, curl, doc, git, http, jsonschema,
     model::{
@@ -424,6 +428,45 @@ async fn h_perf_cfg(
     Json(perf::esegui_cfg(&req, &r.opzioni).await)
 }
 
+/// Avanzamento del test di carico in corso (vedi perf::progresso).
+async fn h_perf_progresso() -> Json<rustman_core::model::ProgressoPerf> {
+    Json(perf::progresso())
+}
+
+#[derive(Deserialize)]
+struct PerfPdfReq {
+    risultato: rustman_core::model::RisultatoPerf,
+    #[serde(default)]
+    titolo: String,
+    #[serde(default)]
+    sottotitolo: String,
+    #[serde(default)]
+    parametri: Vec<(String, String)>,
+}
+
+/// Report PDF del test di carico, in base64 (vedi il comando Tauri gemello).
+async fn h_perf_pdf(Json(r): Json<PerfPdfReq>) -> Json<String> {
+    let pdf =
+        rustman_core::perf_pdf::genera(&r.risultato, &r.titolo, &r.sottotitolo, &r.parametri);
+    Json(rustman_core::perf_pdf::base64(&pdf))
+}
+
+#[derive(Deserialize)]
+struct RunPdfReq {
+    #[serde(default)]
+    titolo: String,
+    #[serde(default)]
+    sottotitolo: String,
+    #[serde(default)]
+    sezioni: Vec<rustman_core::perf_pdf::SezioneRun>,
+}
+
+/// Report PDF di un flusso eseguito, in base64 (vedi il comando Tauri gemello).
+async fn h_run_pdf(Json(r): Json<RunPdfReq>) -> Json<String> {
+    let pdf = rustman_core::perf_pdf::genera_run(&r.titolo, &r.sottotitolo, &r.sezioni);
+    Json(rustman_core::perf_pdf::base64(&pdf))
+}
+
 async fn h_valuta_snapshot(
     State(s): State<Stato>,
     Json(r): Json<SnapshotReq>,
@@ -758,6 +801,9 @@ async fn main() {
         .route("/api/lista_cookie", post(h_lista_cookie))
         .route("/api/svuota_cookie", post(h_svuota_cookie))
         .route("/api/esegui_perf_cfg", post(h_perf_cfg))
+        .route("/api/perf_progresso", post(h_perf_progresso))
+        .route("/api/esporta_perf_pdf", post(h_perf_pdf))
+        .route("/api/esporta_run_pdf", post(h_run_pdf))
         .route("/api/valuta_snapshot", post(h_valuta_snapshot))
         .route("/api/aggiorna_snapshot", post(h_aggiorna_snapshot))
         .route("/api/coverage_openapi", post(h_coverage))
@@ -774,6 +820,10 @@ async fn main() {
         .route("/api/git_pull", post(h_git_pull))
         .route("/api/git_push", post(h_git_push))
         .fallback_service(statici)
+        // Il corpo di una richiesta può essere un JSON da parecchi MB: il
+        // limite predefinito di Axum (2 MB) lo farebbe fallire con
+        // "length limit exceeded" al salvataggio o all'invio.
+        .layer(DefaultBodyLimit::max(LIMITE_CORPO))
         .layer(CorsLayer::permissive())
         .with_state(stato);
 

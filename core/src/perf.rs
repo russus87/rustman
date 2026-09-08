@@ -2,17 +2,118 @@
 //! concorrenza e calcola le statistiche di latenza.
 
 use crate::http;
-use crate::model::{OpzioniPerf, Richiesta, RisultatoPerf};
+use crate::model::{OpzioniPerf, ProgressoPerf, Richiesta, RisultatoPerf};
 use futures::stream::{self, StreamExt};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
+
+// ---------------------------------------------------------------------------
+// Avanzamento del test in corso
+//
+// È process-globale perché di test di carico ne gira uno alla volta, e va
+// letto da fuori (comando Tauri / rotta HTTP) mentre `esegui` è ancora dentro
+// il suo await: passare un canale fin qui avrebbe voluto dire cambiare la
+// firma di tutte le funzioni chiamanti per un dato puramente informativo.
+// ---------------------------------------------------------------------------
+
+struct StatoPerf {
+    in_corso: bool,
+    inizio: Option<Instant>,
+    previste: usize,
+    totale_ms: u128,
+    completate: usize,
+    ok: usize,
+    somma_lat: u128,
+    ultima_lat: u128,
+}
+
+impl StatoPerf {
+    const fn vuoto() -> Self {
+        Self {
+            in_corso: false,
+            inizio: None,
+            previste: 0,
+            totale_ms: 0,
+            completate: 0,
+            ok: 0,
+            somma_lat: 0,
+            ultima_lat: 0,
+        }
+    }
+}
+
+static STATO: Mutex<StatoPerf> = Mutex::new(StatoPerf::vuoto());
+
+/// Azzera i contatori e segna il test come partito.
+fn inizia(previste: usize, totale_ms: u128) {
+    if let Ok(mut s) = STATO.lock() {
+        *s = StatoPerf {
+            in_corso: true,
+            inizio: Some(Instant::now()),
+            previste,
+            totale_ms,
+            ..StatoPerf::vuoto()
+        };
+    }
+}
+
+/// Registra una richiesta completata.
+fn registra(lat: u128, ok: bool) {
+    if let Ok(mut s) = STATO.lock() {
+        s.completate += 1;
+        s.somma_lat += lat;
+        s.ultima_lat = lat;
+        if ok {
+            s.ok += 1;
+        }
+    }
+}
+
+fn termina() {
+    if let Ok(mut s) = STATO.lock() {
+        s.in_corso = false;
+    }
+}
+
+/// Fotografia dell'avanzamento del test in corso (o dell'ultimo concluso).
+pub fn progresso() -> ProgressoPerf {
+    let Ok(s) = STATO.lock() else {
+        return ProgressoPerf {
+            in_corso: false,
+            completate: 0,
+            previste: 0,
+            ok: 0,
+            errori: 0,
+            trascorso_ms: 0,
+            totale_ms: 0,
+            req_al_secondo: 0.0,
+            latenza_media: 0.0,
+            latenza_ultima: 0,
+        };
+    };
+    let trascorso_ms = s.inizio.map(|i| i.elapsed().as_millis()).unwrap_or(0);
+    let secondi = trascorso_ms as f64 / 1000.0;
+    ProgressoPerf {
+        in_corso: s.in_corso,
+        completate: s.completate,
+        previste: s.previste,
+        ok: s.ok,
+        errori: s.completate - s.ok,
+        trascorso_ms,
+        totale_ms: s.totale_ms,
+        req_al_secondo: if secondi > 0.0 { s.completate as f64 / secondi } else { 0.0 },
+        latenza_media: if s.completate > 0 { s.somma_lat as f64 / s.completate as f64 } else { 0.0 },
+        latenza_ultima: s.ultima_lat,
+    }
+}
 
 /// Esegue `n` richieste con al massimo `concorrenza` in volo contemporaneamente.
 pub async fn esegui(richiesta: &Richiesta, n: usize, concorrenza: usize) -> RisultatoPerf {
     let n = n.max(1);
     let concorrenza = concorrenza.clamp(1, 256);
 
+    inizia(n, 0);
     let inizio = Instant::now();
 
     // Ogni task misura la propria latenza e se la risposta è "ok" (status < 400).
@@ -20,16 +121,19 @@ pub async fn esegui(richiesta: &Richiesta, n: usize, concorrenza: usize) -> Risu
     let esiti: Vec<(u128, bool)> = stream::iter(0..n)
         .map(|_| async {
             let t = Instant::now();
-            match http::invia(richiesta).await {
+            let esito = match http::invia(richiesta).await {
                 Ok(r) => (t.elapsed().as_millis(), r.status < 400),
                 Err(_) => (t.elapsed().as_millis(), false),
-            }
+            };
+            registra(esito.0, esito.1);
+            esito
         })
         .buffer_unordered(concorrenza)
         .collect()
         .await;
 
     let durata_totale_ms = inizio.elapsed().as_millis();
+    termina();
     let latenze: Vec<u128> = esiti.iter().map(|(l, _)| *l).collect();
     let ok = esiti.iter().filter(|(_, b)| *b).count();
 
@@ -57,6 +161,9 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
         .or(int_base);
     let spike = opz.profilo == "spike";
 
+    // Nel modo "durata" le richieste non si conoscono in anticipo: l'avanzamento
+    // si misura sul tempo trascorso.
+    inizia(0, fine.as_millis());
     let inizio = Instant::now();
     let mut prossimo = Instant::now();
     let mut handles = Vec::new();
@@ -82,6 +189,7 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
             let esito = http::invia(&r).await;
             let lat = t.elapsed().as_millis();
             let ok = matches!(esito, Ok(rr) if rr.status < 400);
+            registra(lat, ok);
             drop(permesso);
             // Le richieste iniziate durante il warmup non contano.
             if offset >= warmup {
@@ -105,6 +213,7 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
     }
     // La finestra di misura è la durata utile (esclusa il warmup).
     let durata_ms = Duration::from_secs(opz.durata_s).as_millis();
+    termina();
     statistiche(latenze, ok, durata_ms)
 }
 

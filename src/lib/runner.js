@@ -46,15 +46,32 @@ export function ordineTopologico(nodi, archi) {
   });
 }
 
+// Configurazione di un nodo: si cerca prima per id di nodo — due nodi possono
+// puntare alla stessa richiesta e avere impostazioni diverse — e solo in
+// mancanza per file, che è come venivano salvati i flussi più vecchi.
+export function indiciPassi(passi) {
+  const lista = passi || [];
+  return {
+    perNodo: new Map(lista.filter((p) => p.nodo).map((p) => [p.nodo, p])),
+    perFile: new Map(lista.map((p) => [p.file, p])),
+  };
+}
+export function passoDelNodo(indici, nodo) {
+  return indici.perNodo.get(nodo.id) || indici.perFile.get(nodo.file) || null;
+}
+
 // Ricostruisce catena.passi dall'ordine topologico del grafo, preservando la
-// configurazione esistente (condizione/catture/al_fallimento) abbinata per file.
+// configurazione esistente (condizione/catture/al_fallimento/ciclo).
 export function sincronizzaPassi(catena) {
   if (!catena?.nodi?.length) return catena?.passi || [];
-  const perFile = new Map((catena.passi || []).map((p) => [p.file, p]));
+  const indici = indiciPassi(catena.passi);
   const perId = new Map(catena.nodi.map((n) => [n.id, n]));
   return ordineTopologico(catena.nodi, catena.archi || []).map((id) => {
-    const file = perId.get(id).file;
-    return perFile.get(file) || { file, condizione: null, catture: [], al_fallimento: "" };
+    const nodo = perId.get(id);
+    const esistente = passoDelNodo(indici, nodo);
+    return esistente
+      ? { ...esistente, nodo: id, file: nodo.file }
+      : { nodo: id, file: nodo.file, condizione: null, catture: [], al_fallimento: "", ciclo: null };
   });
 }
 
@@ -133,6 +150,187 @@ function applicaCatture(catture, risposta, vars) {
   return fatte;
 }
 
+// ---------------------------------------------------------------------------
+// Cicli (loop) su un passo
+// ---------------------------------------------------------------------------
+
+const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Decide quanti giri fare e su quali elementi. Con "foreach" l'array viene
+// letto dalla risposta del nodo precedente; se non è un array il passo fallisce
+// invece di girare a vuoto, così l'errore si vede nei risultati.
+function pianificaCiclo(ciclo, prev) {
+  const conc = Math.max(1, Math.trunc(Number(ciclo.concorrenza) || 1));
+  if (ciclo.sorgente === "foreach") {
+    const lista = prev ? valoreJson(prev.body, ciclo.lista) : undefined;
+    if (!Array.isArray(lista)) {
+      return { errore: `foreach: "${ciclo.lista || "(nessun path)"}" non è un array nella risposta precedente` };
+    }
+    return { giri: lista.length, elementi: lista, conc };
+  }
+  return { giri: Math.max(0, Math.trunc(Number(ciclo.volte) || 0)), elementi: null, conc };
+}
+
+// Percentile su una lista già ordinata. Stessa convenzione di
+// core/src/perf.rs::percentile, così i numeri del report combaciano con quelli
+// del pannello Performance.
+function percentile(ordinati, p) {
+  if (!ordinati.length) return null;
+  const i = Math.round((p / 100) * (ordinati.length - 1));
+  return ordinati[Math.min(i, ordinati.length - 1)];
+}
+
+// Valore di {{$loopItem}}: gli oggetti passano come JSON, il resto come stringa.
+function valoreItem(v) {
+  if (v === undefined) return undefined;
+  return v !== null && typeof v === "object" ? JSON.stringify(v) : String(v);
+}
+
+/**
+ * Esegue un passo più volte e restituisce un risultato aggregato.
+ *
+ * In sequenza le variabili sono condivise fra i giri: uno script che ne scrive
+ * una la lascia al giro successivo, e la condizione di uscita viene controllata
+ * dopo ogni giro. In concorrenza ogni giro lavora su una copia delle variabili
+ * — altrimenti i giri si sovrascriverebbero a vicenda — e le modifiche vengono
+ * riportate alla fine in ordine di giro (vince l'ultimo); lì la condizione di
+ * uscita può solo impedire l'avvio di nuovi giri, non annullare quelli in volo.
+ */
+async function eseguiCiclo(passo, albero, vars, prev) {
+  const ciclo = passo.ciclo;
+  const orig = trovaRichiesta(albero, passo.file);
+  const nome = orig?.nome || passo.file;
+  if (!orig) {
+    return { risultato: { nome: passo.file, ok: false, errore: "richiesta non trovata", tests: [], logs: [] }, risposta: prev };
+  }
+
+  const piano = pianificaCiclo(ciclo, prev);
+  if (piano.errore) {
+    return { risultato: { nome, ok: false, errore: piano.errore, tests: [], logs: [] }, risposta: prev };
+  }
+  if (piano.giri === 0) {
+    return {
+      risultato: { nome, saltato: true, ok: true, tests: [], logs: [],
+        ciclo: { giri: 0, ok: 0, falliti: 0, concorrenza: piano.conc, uscita: "nessun giro", problemi: [] } },
+      risposta: prev,
+    };
+  }
+
+  // Prepara le variabili di un giro e lo esegue.
+  const giroSu = async (i, varsGiro) => {
+    varsGiro.$loopIndex = String(i);
+    varsGiro.$loopCount = String(piano.giri);
+    if (piano.elementi) {
+      const it = valoreItem(piano.elementi[i]);
+      varsGiro.$loopItem = it === undefined ? "" : it;
+    }
+    const esito = await eseguiPasso(passo, albero, varsGiro);
+    return { i, ...esito };
+  };
+
+  const esiti = new Array(piano.giri);
+  let uscita = "completato";
+
+  if (piano.conc <= 1) {
+    for (let i = 0; i < piano.giri; i++) {
+      if (i > 0 && Number(ciclo.ritardo_ms) > 0) await pausa(Number(ciclo.ritardo_ms));
+      const e = await giroSu(i, vars);
+      esiti[i] = e;
+      if (!e.risultato.ok && ciclo.al_fallimento !== "continua") { uscita = "fermato da un giro fallito"; break; }
+      if (ciclo.esci_se && valutaCondizione(ciclo.esci_se, e.risposta, vars)) { uscita = "condizione di uscita"; break; }
+    }
+  } else {
+    // Pool di worker: `prossimo` distribuisce gli indici, `stop` impedisce di
+    // avviarne altri quando il ciclo deve terminare.
+    const copie = new Array(piano.giri);
+    let prossimo = 0;
+    let stop = false;
+    const worker = async () => {
+      for (;;) {
+        if (stop) return;
+        const i = prossimo++;
+        if (i >= piano.giri) return;
+        const varsGiro = { ...vars };
+        copie[i] = varsGiro;
+        const e = await giroSu(i, varsGiro);
+        esiti[i] = e;
+        if (!e.risultato.ok && ciclo.al_fallimento !== "continua") { stop = true; uscita = "fermato da un giro fallito"; return; }
+        if (ciclo.esci_se && valutaCondizione(ciclo.esci_se, e.risposta, varsGiro)) { stop = true; uscita = "condizione di uscita"; return; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(piano.conc, piano.giri) }, worker));
+    // Riporta le variabili dei giri completati, in ordine di giro.
+    for (let i = 0; i < piano.giri; i++) {
+      if (!esiti[i] || !copie[i]) continue;
+      for (const [k, v] of Object.entries(copie[i])) if (!k.startsWith("$loop")) vars[k] = v;
+    }
+  }
+
+  const fatti = esiti.filter(Boolean);
+  const okN = fatti.filter((e) => e.risultato.ok).length;
+  // Latenza di ogni giro, in ordine di giro: serve al report per disegnare
+  // andamento e distribuzione. Sono numeri, non corpi: la memoria resta piatta
+  // anche su cicli da migliaia di giri.
+  const tempi = fatti.map((e) => e.risultato.tempo).filter((t) => typeof t === "number");
+  const ordinati = [...tempi].sort((a, b) => a - b);
+  const somma = tempi.reduce((a, b) => a + b, 0);
+  const problemi = fatti
+    .filter((e) => !e.risultato.ok)
+    .slice(0, 20)
+    .map((e) => ({
+      giro: e.i,
+      status: e.risultato.status,
+      errore: e.risultato.errore,
+      test: (e.risultato.tests || []).filter((t) => !t.passato).map((t) => t.descrizione),
+    }));
+
+  // Ultimo giro completato: è la risposta che i rami in uscita vedranno.
+  let ultima = prev;
+  let ultimo = null;
+  for (let i = piano.giri - 1; i >= 0; i--) {
+    if (esiti[i]) { ultimo = esiti[i]; if (esiti[i].risposta) ultima = esiti[i].risposta; break; }
+  }
+
+  return {
+    risultato: {
+      nome,
+      ok: fatti.length > 0 && okN === fatti.length,
+      status: ultimo?.risultato.status,
+      tempo: somma,
+      tests: [],
+      logs: ultimo?.risultato.logs || [],
+      catture: ultimo?.risultato.catture,
+      ciclo: {
+        giri: fatti.length,
+        previsti: piano.giri,
+        ok: okN,
+        falliti: fatti.length - okN,
+        concorrenza: piano.conc,
+        sorgente: ciclo.sorgente === "foreach" ? `foreach ${ciclo.lista}` : "volte",
+        tempoTot: somma,
+        tempoMedio: tempi.length ? Math.round(somma / tempi.length) : null,
+        tempoMin: ordinati.length ? ordinati[0] : null,
+        tempoMax: ordinati.length ? ordinati[ordinati.length - 1] : null,
+        p50: percentile(ordinati, 50),
+        p90: percentile(ordinati, 90),
+        p95: percentile(ordinati, 95),
+        p99: percentile(ordinati, 99),
+        tempi,
+        testOk: fatti.reduce((n, e) => n + (e.risultato.tests || []).filter((t) => t.passato).length, 0),
+        testTot: fatti.reduce((n, e) => n + (e.risultato.tests || []).length, 0),
+        uscita,
+        problemi,
+      },
+    },
+    risposta: ultima,
+  };
+}
+
+// Esegue un passo, ripetendolo se ha un ciclo configurato.
+function eseguiPassoOCiclo(passo, albero, vars, prev) {
+  return passo.ciclo ? eseguiCiclo(passo, albero, vars, prev) : eseguiPasso(passo, albero, vars);
+}
+
 /**
  * Esegue il flusso. `varsBase` è la mappa delle variabili dell'ambiente attivo.
  * Supporta condizioni (salta il passo), catture (salva variabili) e
@@ -149,7 +347,7 @@ export async function eseguiCatena(catena, albero, varsBase) {
       risultati.push({ nome: passo.file, saltato: true, ok: true, tests: [], logs: [] });
       continue;
     }
-    const { risultato, risposta } = await eseguiPasso(passo, albero, vars);
+    const { risultato, risposta } = await eseguiPassoOCiclo(passo, albero, vars, prev);
     if (risposta) prev = risposta;
     risultati.push(risultato);
     if (risultato.errore === "richiesta non trovata") break;
@@ -215,7 +413,7 @@ export async function eseguiGrafo(catena, albero, varsBase) {
 
   const vars = { ...(varsBase || {}) };
   const perId = new Map(nodi.map((n) => [n.id, n]));
-  const perFile = new Map((catena.passi || []).map((p) => [p.file, p]));
+  const indici = indiciPassi(catena.passi);
   const uscite = new Map(nodi.map((n) => [n.id, []]));
   const gradoIn = new Map(nodi.map((n) => [n.id, 0]));
   for (const a of archi) {
@@ -244,13 +442,14 @@ export async function eseguiGrafo(catena, albero, varsBase) {
 
     let resp = predResp.get(id) || null;
     if (!isStart) {
-      const passo = perFile.get(nodo.file) || { file: nodo.file, condizione: null, catture: [], al_fallimento: "" };
+      const passo = passoDelNodo(indici, nodo)
+        || { nodo: nodo.id, file: nodo.file, condizione: null, catture: [], al_fallimento: "", ciclo: null };
       // Skip del nodo: condizione valutata sulla risposta del predecessore.
       if (!valutaCondizione(passo.condizione, predResp.get(id) || null, vars)) {
         risultati.push({ nome: nodo.label || nodo.file, saltato: true, ok: true, tests: [], logs: [] });
         continue; // nodo saltato: non propaga oltre
       }
-      const esito = await eseguiPasso(passo, albero, vars);
+      const esito = await eseguiPassoOCiclo(passo, albero, vars, predResp.get(id) || null);
       resp = esito.risposta;
       risultati.push(esito.risultato);
       if (esito.risultato.errore === "richiesta non trovata") { interrotto = true; continue; }

@@ -302,6 +302,38 @@ async fn esegui_perf_cfg(
     Ok(perf::esegui_cfg(&r, &opzioni).await)
 }
 
+/// Avanzamento del test di carico in corso: la UI lo interroga a intervalli
+/// per mostrare a che punto siamo mentre `esegui_perf_cfg` è ancora in attesa.
+#[tauri::command]
+fn perf_progresso() -> rustman_core::model::ProgressoPerf {
+    perf::progresso()
+}
+
+/// Report PDF di un test di carico, restituito in base64 perché il frontend
+/// possa salvarlo come file (identico su desktop e su web).
+#[tauri::command]
+fn esporta_perf_pdf(
+    risultato: RisultatoPerf,
+    titolo: String,
+    sottotitolo: String,
+    parametri: Vec<(String, String)>,
+) -> String {
+    let pdf = rustman_core::perf_pdf::genera(&risultato, &titolo, &sottotitolo, &parametri);
+    rustman_core::perf_pdf::base64(&pdf)
+}
+
+/// Report PDF di un flusso eseguito: confronto fra i nodi con loop e una
+/// scheda per nodo. Restituito in base64 come quello del test di carico.
+#[tauri::command]
+fn esporta_run_pdf(
+    titolo: String,
+    sottotitolo: String,
+    sezioni: Vec<rustman_core::perf_pdf::SezioneRun>,
+) -> String {
+    let pdf = rustman_core::perf_pdf::genera_run(&titolo, &sottotitolo, &sezioni);
+    rustman_core::perf_pdf::base64(&pdf)
+}
+
 /// Snapshot/golden: registra (prima volta) o confronta il body con la baseline.
 #[tauri::command]
 fn valuta_snapshot(
@@ -729,6 +761,9 @@ pub fn run() {
             security_scan,
             esegui_perf,
             esegui_perf_cfg,
+            perf_progresso,
+            esporta_perf_pdf,
+            esporta_run_pdf,
             lista_workspaces,
             aggiungi_workspace,
             imposta_workspace_attivo,

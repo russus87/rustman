@@ -7,6 +7,7 @@
   import RequestNode from "./flow/WfRequestNode.svelte";
   import StartNode from "./flow/WfStartNode.svelte";
   import { t } from "../lib/i18n.svelte.js";
+  import { indiciPassi, passoDelNodo } from "../lib/runner.js";
 
   let { catena, albero, onSalva, onEsegui } = $props();
 
@@ -85,14 +86,36 @@
   // Contatore id: oltre il massimo "nN" già presente.
   let contatore = Math.max(0, ...nodes.map((n) => Number(String(n.id).replace(/^n/, "")) || 0)) + 1;
 
-  // Config per-nodo (skip/catture/al_fallimento), indicizzata per file richiesta.
-  let cfg = $state({});
-  for (const p of catena.passi || []) {
-    cfg[p.file] = { condizione: p.condizione || null, catture: p.catture || [], al_fallimento: p.al_fallimento || "" };
+  // Config di nodo (skip/catture/al_fallimento/loop), indicizzata per id di
+  // nodo: due nodi che puntano alla stessa richiesta devono poter avere
+  // impostazioni diverse. I flussi salvati prima l'abbinavano al file, quindi
+  // in lettura si migra duplicandola — copie profonde, altrimenti i due nodi
+  // continuerebbero a condividere gli stessi oggetti annidati.
+  function cfgVuota() {
+    return { condizione: null, catture: [], al_fallimento: "", ciclo: null };
   }
-  function cfgDi(file) {
-    if (!cfg[file]) cfg[file] = { condizione: null, catture: [], al_fallimento: "" };
-    return cfg[file];
+  function cfgDaPasso(p) {
+    if (!p) return cfgVuota();
+    return {
+      condizione: p.condizione ? { ...p.condizione } : null,
+      catture: (p.catture || []).map((c) => ({ ...c })),
+      al_fallimento: p.al_fallimento || "",
+      ciclo: p.ciclo
+        ? { ...p.ciclo, esci_se: p.ciclo.esci_se ? { ...p.ciclo.esci_se } : null }
+        : null,
+    };
+  }
+  let cfg = $state({});
+  {
+    const indici = indiciPassi(catena.passi);
+    for (const n of init.nodes) {
+      if (n.type !== "request") continue;
+      cfg[n.id] = cfgDaPasso(passoDelNodo(indici, { id: n.id, file: n.data.file }));
+    }
+  }
+  function cfgDi(id) {
+    if (!cfg[id]) cfg[id] = cfgVuota();
+    return cfg[id];
   }
   let guidaAperta = $state(false);
 
@@ -111,10 +134,12 @@
     const passi = nodi
       .filter((n) => n.tipo === "request" && n.file)
       .map((n) => ({
+        nodo: n.id,
         file: n.file,
-        condizione: cfg[n.file]?.condizione || null,
-        catture: cfg[n.file]?.catture || [],
-        al_fallimento: cfg[n.file]?.al_fallimento || "",
+        condizione: cfg[n.id]?.condizione || null,
+        catture: cfg[n.id]?.catture || [],
+        al_fallimento: cfg[n.id]?.al_fallimento || "",
+        ciclo: cfg[n.id]?.ciclo || null,
       }));
     return { ...catena, nome, nodi, archi, passi };
   }
@@ -124,6 +149,7 @@
     const file = e.target.value;
     if (!file) return;
     const id = `n${contatore++}`;
+    cfg[id] = cfgVuota();
     nodes = [...nodes, {
       id, type: "request",
       position: { x: 260 + (nodes.length % 4) * 40, y: 120 + nodes.length * 20 },
@@ -152,14 +178,14 @@
   let nodoSel = $state(null); // id del nodo selezionato
   const arco = $derived(edges.find((e) => e.id === arcoSel) || null);
   const nodo = $derived(nodes.find((n) => n.id === nodoSel) || null);
-  const nodoCfg = $derived(nodo && nodo.type === "request" ? (cfg[nodo.data.file] || null) : null);
+  const nodoCfg = $derived(nodo && nodo.type === "request" ? (cfg[nodo.id] || null) : null);
 
   function deseleziona() { arcoSel = null; nodoSel = null; }
   // xyflow passa un oggetto { edge, event } / { node, event }.
   function selezionaArco({ edge }) { nodoSel = null; arcoSel = edge?.id ?? null; }
   function selezionaNodo({ node }) {
     arcoSel = null;
-    if (node && node.type !== "start") { cfgDi(node.data.file); nodoSel = node.id; }
+    if (node && node.type !== "start") { cfgDi(node.id); nodoSel = node.id; }
     else nodoSel = null;
   }
   function aggiornaArco(patch) {
@@ -179,6 +205,36 @@
   function toggleSkip(on) {
     nodoCfg.condizione = on ? { tipo: "status", campo: "", operatore: "==", atteso: "200" } : null;
   }
+
+  // ---- Ciclo (loop) sul nodo ----
+  const CICLO_DEFAULT = {
+    sorgente: "volte", volte: 5, lista: "", concorrenza: 1,
+    ritardo_ms: 0, esci_se: null, al_fallimento: "",
+  };
+  function toggleCiclo(on) {
+    nodoCfg.ciclo = on ? { ...CICLO_DEFAULT } : null;
+  }
+  function toggleEsciSe(on) {
+    nodoCfg.ciclo.esci_se = on ? { tipo: "status", campo: "", operatore: "!=", atteso: "200" } : null;
+  }
+  function intero(v, min) {
+    const n = Math.trunc(Number(v));
+    return Number.isFinite(n) ? Math.max(min, n) : min;
+  }
+  // Badge mostrato sul nodo. Legge i singoli campi (non l'oggetto) così la
+  // reattività scatta anche quando cambia solo il numero di giri.
+  function etichettaCiclo(c) {
+    if (!c) return "";
+    const quanti = c.sorgente === "foreach" ? (c.lista || "lista") : String(c.volte ?? 0);
+    const conc = Number(c.concorrenza) > 1 ? ` ×${c.concorrenza}` : "";
+    return `↻ ${quanti}${conc}`;
+  }
+  // Riporta il badge nei dati dei nodi quando la configurazione cambia.
+  $effect(() => {
+    const attesi = nodes.map((n) => (n.type === "request" ? etichettaCiclo(cfg[n.id]?.ciclo) : ""));
+    if (nodes.every((n, i) => (n.data.ciclo || "") === attesi[i])) return;
+    nodes = nodes.map((n, i) => ({ ...n, data: { ...n.data, ciclo: attesi[i] } }));
+  });
 </script>
 
 <div class="wf">
@@ -269,6 +325,74 @@
             <option value="continua">Continua comunque</option>
           </select>
         </div>
+
+        <div class="insp-sub">Loop</div>
+        <label class="insp-ck">
+          <input type="checkbox" checked={!!nodoCfg.ciclo} onchange={(e) => toggleCiclo(e.currentTarget.checked)} />
+          Ripeti questo nodo
+        </label>
+        {#if nodoCfg.ciclo}
+          {@const cl = nodoCfg.ciclo}
+          <div class="insp-row">
+            <select value={cl.sorgente} onchange={(e) => (cl.sorgente = e.currentTarget.value)}>
+              <option value="volte">N volte</option>
+              <option value="foreach">per ogni…</option>
+            </select>
+            {#if cl.sorgente === "foreach"}
+              <input placeholder="data.items" value={cl.lista} oninput={(e) => (cl.lista = e.currentTarget.value)} />
+            {:else}
+              <input type="number" min="0" style="max-width:80px" value={cl.volte}
+                oninput={(e) => (cl.volte = intero(e.currentTarget.value, 0))} />
+              <span class="insp-u">giri</span>
+            {/if}
+          </div>
+          <div class="insp-row">
+            <select value={Number(cl.concorrenza) > 1 ? "par" : "seq"}
+              onchange={(e) => (cl.concorrenza = e.currentTarget.value === "par" ? Math.max(2, Number(cl.concorrenza) || 2) : 1)}>
+              <option value="seq">in sequenza</option>
+              <option value="par">in concorrenza</option>
+            </select>
+            {#if Number(cl.concorrenza) > 1}
+              <input type="number" min="2" style="max-width:70px" value={cl.concorrenza}
+                oninput={(e) => (cl.concorrenza = intero(e.currentTarget.value, 2))} />
+              <span class="insp-u">insieme</span>
+            {:else}
+              <input type="number" min="0" style="max-width:80px" value={cl.ritardo_ms}
+                oninput={(e) => (cl.ritardo_ms = intero(e.currentTarget.value, 0))} />
+              <span class="insp-u">ms di pausa</span>
+            {/if}
+          </div>
+          <div class="insp-row">
+            <select value={cl.al_fallimento} onchange={(e) => (cl.al_fallimento = e.currentTarget.value)}>
+              <option value="">Se un giro fallisce: ferma</option>
+              <option value="continua">Se un giro fallisce: continua</option>
+            </select>
+          </div>
+          <label class="insp-ck">
+            <input type="checkbox" checked={!!cl.esci_se} onchange={(e) => toggleEsciSe(e.currentTarget.checked)} />
+            Esci dal loop se…
+          </label>
+          {#if cl.esci_se}
+            {@const u = cl.esci_se}
+            <div class="insp-row">
+              <select value={u.tipo} onchange={(e) => (u.tipo = e.currentTarget.value)}>
+                {#each tipiCond as tp}<option value={tp}>{tp}</option>{/each}
+              </select>
+              {#if u.tipo !== "status"}<input placeholder={u.tipo === "json" ? "data.fine" : "var"} value={u.campo} oninput={(e) => (u.campo = e.currentTarget.value)} />{/if}
+            </div>
+            <div class="insp-row">
+              <select value={u.operatore} onchange={(e) => (u.operatore = e.currentTarget.value)}>{#each operatori as o}<option value={o}>{o}</option>{/each}</select>
+              <input placeholder="atteso" value={u.atteso} oninput={(e) => (u.atteso = e.currentTarget.value)} />
+            </div>
+          {/if}
+          <p class="insp-hint">
+            Dentro il giro sono disponibili <code>{"{{$loopIndex}}"}</code> (da 0),
+            <code>{"{{$loopCount}}"}</code>{#if cl.sorgente === "foreach"} e <code>{"{{$loopItem}}"}</code>{/if}
+            in URL, header e corpo.
+            {#if cl.sorgente === "foreach"}La lista è letta dalla risposta del nodo precedente.{/if}
+            {#if Number(cl.concorrenza) > 1}In concorrenza ogni giro lavora su una copia delle variabili: le catture dell'ultimo giro vincono, e l'uscita anticipata non annulla i giri già partiti.{/if}
+          </p>
+        {/if}
 
         <label class="insp-ck" style="margin-top:4px">
           <input type="checkbox" checked={!!nodoCfg.condizione} onchange={(e) => toggleSkip(e.currentTarget.checked)} />
@@ -412,6 +536,11 @@
   }
   .insp-row select:focus, .insp-row input:focus { border-color: var(--accent); }
   .insp-hint { font-size: 10.5px; color: var(--txt-faint); line-height: 1.4; }
+  .insp-hint code { font-family: var(--mono); color: var(--accent-2); }
+  /* Unità di misura accanto ai campi numerici del loop. */
+  .insp-u { font-size: 10.5px; color: var(--txt-faint); white-space: nowrap; }
+  /* I select del loop hanno etichette lunghe: che non stringano gli input. */
+  .insp-row select { min-width: 0; }
   .insp-x.sm { font-size: 11px; flex: none; align-self: center; }
   .insp-sub { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--txt-faint); margin-top: 4px; }
   .insp-add { align-self: flex-start; background: var(--panel-3); color: var(--txt-dim); border: 1px solid var(--border-2); border-radius: 6px; padding: 3px 9px; font-size: 11px; cursor: pointer; }

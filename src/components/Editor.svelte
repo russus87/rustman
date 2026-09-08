@@ -14,9 +14,12 @@
     onSalva,
     onCopiaCodice,
     onOttieniToken,
+    chiaveTab = null,
   } = $props();
 
   import * as api from "../lib/api.js";
+  import CodeEditor from "./CodeEditor.svelte";
+  import { trasformaJson } from "../lib/json-fmt.js";
 
   let tab = $state("Body");
   const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Codice", "Note", "Esempi"];
@@ -147,14 +150,63 @@
     richiesta.tests.splice(i, 1);
   }
 
-  // Indenta il corpo se è JSON valido.
-  function formatta() {
+  // ---- Corpo raw: editor CodeMirror + formattazione fuori thread ----
+  // Il corpo può pesare parecchi MB: `JSON.parse` + `stringify` sul thread
+  // principale bloccherebbero la finestra, quindi passano da un worker.
+  let bodyEl = $state(null);
+  let statoBody = $state({ righe: 0, caratteri: 0, ricca: true });
+  let aCapoBody = $state(true);
+  let riccaForzata = $state(false);
+  let fmtInCorso = $state(false);
+  let esitoFmt = $state(null); // { ok, testo } mostrato per qualche secondo
+
+  function segnalaFmt(ok, testo) {
+    esitoFmt = { ok, testo };
+    setTimeout(() => (esitoFmt = null), 3500);
+  }
+
+  async function trasformaBody(azione) {
+    if (fmtInCorso || !bodyEl) return;
+    const testo = bodyEl.contenuto();
+    if (!testo.trim()) return;
+    fmtInCorso = true;
+    const inizio = performance.now();
     try {
-      richiesta.body = JSON.stringify(JSON.parse(richiesta.body), null, 2);
-    } catch {
-      /* corpo non JSON: nessuna modifica */
+      const out = await trasformaJson(testo, azione);
+      bodyEl.imposta(out);
+      segnalaFmt(true, `${azione === "compatta" ? "Compattato" : "Formattato"} in ${Math.round(performance.now() - inizio)} ms`);
+    } catch (e) {
+      segnalaFmt(false, `JSON non valido: ${e?.message ?? e}`);
+    } finally {
+      fmtInCorso = false;
     }
   }
+
+  // Numero con separatore di migliaia, per la barra di stato del corpo.
+  function numero(n) {
+    return n.toLocaleString("it-IT");
+  }
+  function pesoTesto(caratteri) {
+    if (caratteri < 1024) return `${caratteri} car.`;
+    if (caratteri < 1024 * 1024) return `${(caratteri / 1024).toFixed(1)} K car.`;
+    return `${(caratteri / 1048576).toFixed(2)} M car.`;
+  }
+
+  // Prima di inviare o salvare va svuotato il debounce dell'editor, altrimenti
+  // `richiesta.body` potrebbe essere indietro di qualche centinaio di ms.
+  function inviaConBody() {
+    bodyEl?.flush();
+    onInvia?.();
+  }
+  function salvaConBody() {
+    bodyEl?.flush();
+    onSalva?.();
+  }
+  const scorciatoieBody = [
+    { key: "Mod-Enter", preventDefault: true, run: () => { inviaConBody(); return true; } },
+    { key: "Mod-s", preventDefault: true, run: () => { if (salvabile) salvaConBody(); return true; } },
+    { key: "Shift-Alt-f", preventDefault: true, run: () => { trasformaBody("formatta"); return true; } },
+  ];
 
   // Corpo: modalità e campi del form (form-data / urlencoded).
   // Garantisce i valori di default su richieste vecchie o create al volo.
@@ -211,10 +263,10 @@
 
   // Scorciatoie: Ctrl/Cmd+Invio invia, Ctrl/Cmd+S salva.
   function suTasto(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onInvia();
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") inviaConBody();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
-      if (salvabile) onSalva();
+      if (salvabile) salvaConBody();
     }
   }
 </script>
@@ -264,12 +316,12 @@
       {/if}
     </div>
     <div class="btn-split">
-      <button class="btn btn-send main" onclick={onInvia} disabled={inCorso}>
+      <button class="btn btn-send main" onclick={inviaConBody} disabled={inCorso}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
         {inCorso ? "Invio..." : "Send"}
       </button>
     </div>
-    <button class="btn btn-save" onclick={onSalva} disabled={!salvabile} title="Salva (Ctrl+S)">
+    <button class="btn btn-save" onclick={salvaConBody} disabled={!salvabile} title="Salva (Ctrl+S)">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save
     </button>
   </div>
@@ -329,14 +381,50 @@
         <option value="form-data">form-data</option>
         <option value="x-www-form-urlencoded">x-www-form-urlencoded</option>
       </select>
+      {#if (richiesta.body_mode ?? "raw") === "raw"}
+        <span class="body-stato" title="Righe e dimensione del corpo">
+          {numero(statoBody.righe)} righe · {pesoTesto(statoBody.caratteri)}
+          {#if !statoBody.ricca}
+            <span class="body-lite" onclick={() => (riccaForzata = true)}
+              title="Sopra i 4 MB evidenziazione e folding sono spenti per non rallentare la digitazione. Clicca per riaccenderli comunque.">modalità leggera</span>
+          {:else if riccaForzata}
+            <span class="body-lite forz" onclick={() => (riccaForzata = false)}
+              title="Evidenziazione forzata su un corpo grande. Clicca per tornare alla modalità leggera.">evidenziazione forzata</span>
+          {/if}
+          {#if statoBody.rigaLunga}
+            <span class="body-lite" title="Il corpo contiene una riga lunghissima (JSON compattato): l'a capo è disattivato perché renderebbe l'editor lento. Premi Formatta per riattivarlo.">riga unica · a capo off</span>
+          {/if}
+        </span>
+      {/if}
       <span class="bt-spacer"></span>
       {#if (richiesta.body_mode ?? "raw") === "raw"}
-        <span class="beautify" onclick={formatta} title="Indenta il JSON">Formatta</span>
+        {#if esitoFmt}
+          <span class="fmt-esito" class:ko={!esitoFmt.ok}>{esitoFmt.testo}</span>
+        {/if}
+        <label class="body-chk" title="Manda a capo le righe lunghe">
+          <input type="checkbox" bind:checked={aCapoBody} /> a capo
+        </label>
+        <span class="beautify" class:disab={fmtInCorso} onclick={() => trasformaBody("formatta")}
+          title="Indenta il JSON (Shift+Alt+F) — eseguito su un thread separato">
+          {fmtInCorso ? "Elaboro…" : "Formatta"}
+        </span>
+        <span class="beautify" class:disab={fmtInCorso} onclick={() => trasformaBody("compatta")}
+          title="Rimuove spazi e a capo dal JSON">Compatta</span>
       {/if}
     </div>
     {#if (richiesta.body_mode ?? "raw") === "raw"}
-      <div class="code-wrap">
-        <textarea class="code-area" bind:value={richiesta.body} spellcheck="false" placeholder={'{\n  "chiave": "valore"\n}'}></textarea>
+      <div class="code-wrap" style="display:flex;overflow:hidden">
+        <CodeEditor
+          bind:this={bodyEl}
+          chiave={chiaveTab}
+          valore={richiesta.body ?? ""}
+          onCambia={(t) => (richiesta.body = t)}
+          onStato={(s) => (statoBody = s)}
+          aCapo={aCapoBody}
+          forzaRicca={riccaForzata}
+          scorciatoie={scorciatoieBody}
+          testo={'{\n  "chiave": "valore"\n}'}
+        />
       </div>
     {:else}
       <div class="code-wrap" style="padding:12px 14px">
@@ -433,8 +521,13 @@
             <input class="inline-input" style="max-width:200px" bind:value={e.nome} />
             <span class="test-sel" style="padding:2px 8px">{e.status}</span>
             <span class="rsp-icon" onclick={() => rimuoviEsempio(i)} title="Rimuovi">✕</span>
+            <span class="es-peso">{pesoTesto((e.body ?? "").length)}</span>
           </div>
-          <textarea class="code-area" style="min-height:90px" readonly>{e.body}</textarea>
+          <!-- Un esempio è una risposta salvata: può pesare quanto la risposta
+               originale, quindi vale lo stesso editor virtualizzato. -->
+          <div class="es-corpo">
+            <CodeEditor chiave={`es-${i}`} valore={e.body ?? ""} soloLettura />
+          </div>
         </div>
       {/each}
       {#if (richiesta.esempi ?? []).length === 0}
@@ -576,6 +669,49 @@
   .bt-spacer {
     flex: 1;
   }
+  /* Stato del corpo (righe / dimensione) e comandi di formattazione */
+  .body-stato {
+    margin-left: 12px;
+    color: var(--txt-faint);
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  .body-lite {
+    margin-left: 8px;
+    color: var(--orange);
+    background: var(--panel-3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10.5px;
+    cursor: pointer;
+  }
+  .body-lite.forz {
+    color: var(--accent-2);
+  }
+  .body-chk {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 14px;
+    color: var(--txt-dim);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .fmt-esito {
+    margin-right: 14px;
+    color: var(--green);
+    font-size: 11.5px;
+  }
+  .fmt-esito.ko {
+    color: var(--red);
+  }
+  .beautify.disab {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .beautify + .beautify {
+    margin-left: 14px;
+  }
   /* Form auth */
   .auth-row {
     display: flex;
@@ -639,6 +775,20 @@
   }
   .mini-b:hover {
     background: #22222e;
+  }
+  /* Corpo di un esempio: altezza fissa, l'editor scorre dentro. */
+  .es-corpo {
+    display: flex;
+    height: 180px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .es-peso {
+    margin-left: auto;
+    color: var(--txt-faint);
+    font-family: var(--mono);
+    font-size: 11px;
   }
   .tags-input {
     width: 140px; background: var(--panel-2); border: 1px solid var(--border);

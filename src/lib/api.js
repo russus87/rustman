@@ -87,6 +87,14 @@ export const valutaSnapshot = (file, ignora, risposta) =>
 export const aggiornaSnapshot = (file, body) => call("aggiorna_snapshot", { file, body });
 export const coverageOpenapi = (spec) => call("coverage_openapi", { spec });
 export const generaReport = (esiti, titolo) => call("genera_report", { esiti, titolo });
+// Avanzamento del test di carico in corso (interrogato a intervalli dalla UI).
+export const perfProgresso = () => call("perf_progresso");
+// Report PDF del test di carico, restituito in base64.
+export const esportaPerfPdf = (risultato, titolo, sottotitolo, parametri) =>
+  call("esporta_perf_pdf", { risultato, titolo, sottotitolo, parametri });
+// Report PDF di un flusso eseguito (confronto + scheda per nodo), in base64.
+export const esportaRunPdf = (titolo, sottotitolo, sezioni) =>
+  call("esporta_run_pdf", { titolo, sottotitolo, sezioni });
 
 // ---- Trend dei test ----
 export const caricaRuns = () => call("carica_runs");

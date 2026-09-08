@@ -15,7 +15,7 @@
 mod script;
 
 use rustman_core::model::{
-    ArcoFlusso, Catena, Cattura, Condizione, Nodo, NodoFlusso, Passo, Richiesta, Risposta,
+    ArcoFlusso, Catena, Cattura, Ciclo, Condizione, Nodo, NodoFlusso, Passo, Richiesta, Risposta,
     RisultatoRun, RisultatoTest,
 };
 use rustman_core::{http, storage, test, vars};
@@ -817,6 +817,273 @@ fn ko_test(det: &str) -> RisultatoTest {
     RisultatoTest { descrizione: "snapshot".into(), passato: false, dettaglio: det.into() }
 }
 
+/// Elementi su cui iterare in modalità foreach: l'array al path indicato nella
+/// risposta del nodo precedente. `None` se il path non porta a un array.
+/// Gli oggetti diventano JSON, le stringhe restano nude: è il valore che il
+/// giro vedrà in `{{$loopItem}}`.
+fn lista_foreach(prev: Option<&Risposta>, path: &str) -> Option<Vec<String>> {
+    let radice: serde_json::Value = serde_json::from_str(&prev?.body).ok()?;
+    let mut cur = &radice;
+    for parte in path.split('.').filter(|p| !p.is_empty()) {
+        cur = match cur {
+            serde_json::Value::Object(m) => m.get(parte)?,
+            serde_json::Value::Array(a) => a.get(parte.parse::<usize>().ok()?)?,
+            _ => return None,
+        };
+    }
+    Some(
+        cur.as_array()?
+            .iter()
+            .map(|v| match v {
+                serde_json::Value::String(s) => s.clone(),
+                altro => altro.to_string(),
+            })
+            .collect(),
+    )
+}
+
+/// Variabili proprie di un giro del ciclo, viste dalla richiesta come
+/// `{{$loopIndex}}`, `{{$loopCount}}` e `{{$loopItem}}`.
+fn vars_del_giro(vars: &mut HashMap<String, String>, i: usize, giri: usize, elementi: Option<&[String]>) {
+    vars.insert("$loopIndex".into(), i.to_string());
+    vars.insert("$loopCount".into(), giri.to_string());
+    if let Some(el) = elementi {
+        vars.insert("$loopItem".into(), el.get(i).cloned().unwrap_or_default());
+    }
+}
+
+/// Esito "sintetico" per un passo che non è nemmeno partito.
+fn esito_fallito(nome: &str, req: &Richiesta, msg: String) -> Esito {
+    Esito {
+        nome: nome.to_string(),
+        metodo: req.metodo.clone(),
+        url: req.url.clone(),
+        status: 0,
+        status_text: String::new(),
+        tempo_ms: 0,
+        errore: Some(msg),
+        risultati: Vec::new(),
+    }
+}
+
+/// Un giro di ciclo concluso: esito, risposta e variabili con cui ha lavorato.
+type GiroSvolto = (Esito, Option<Risposta>, HashMap<String, String>);
+
+/// Esegue un passo ripetendolo secondo la sua configurazione di ciclo.
+///
+/// In sequenza le variabili sono condivise fra i giri: uno script (o una
+/// cattura) che ne scrive una la lascia al giro successivo, e la condizione di
+/// uscita è valutata dopo ogni giro. In concorrenza ogni giro lavora su una
+/// copia delle variabili — altrimenti i giri si sovrascriverebbero a vicenda —
+/// e le modifiche sono riportate alla fine in ordine di giro (vince l'ultimo);
+/// lì l'uscita anticipata impedisce di avviare altri giri, ma quelli già
+/// partiti arrivano comunque a termine.
+///
+/// Ritorna gli esiti dei giri, la risposta dell'ultimo giro completato (quella
+/// che i rami in uscita vedranno) e se il ciclo nel complesso è andato bene.
+#[allow(clippy::too_many_arguments)]
+async fn esegui_ciclo(
+    root: &Path,
+    file: &str,
+    req: &Richiesta,
+    passo: &Passo,
+    ciclo: &Ciclo,
+    prev: Option<&Risposta>,
+    variabili: &mut HashMap<String, String>,
+    retry: u32,
+    delay: u64,
+    update_snapshots: bool,
+) -> (Vec<Esito>, Option<Risposta>, bool) {
+    use std::cell::RefCell;
+
+    let nome = if req.nome.is_empty() { file } else { &req.nome };
+
+    let elementi: Option<Vec<String>> = if ciclo.sorgente == "foreach" {
+        match lista_foreach(prev, &ciclo.lista) {
+            Some(v) => Some(v),
+            None => {
+                let path = if ciclo.lista.is_empty() { "(nessun path)" } else { &ciclo.lista };
+                let msg = format!("foreach: \"{path}\" non è un array nella risposta precedente");
+                eprintln!("  ✗ {msg}");
+                return (vec![esito_fallito(nome, req, msg)], None, false);
+            }
+        }
+    } else {
+        None
+    };
+    let giri = elementi.as_ref().map(|e| e.len()).unwrap_or(ciclo.volte as usize);
+    if giri == 0 {
+        println!("  ↻ {nome}: nessun giro da eseguire");
+        return (Vec::new(), prev.cloned(), true);
+    }
+    let conc = (ciclo.concorrenza.max(1) as usize).min(giri);
+
+    let mut esiti: Vec<Option<(Esito, Option<Risposta>)>> = (0..giri).map(|_| None).collect();
+    let mut uscita = "completato";
+
+    if conc <= 1 {
+        // `i` non è solo un indice: è il numero del giro, che finisce in
+        // {{$loopIndex}} e sceglie l'elemento di foreach.
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..giri {
+            if i > 0 && ciclo.ritardo_ms > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(ciclo.ritardo_ms)).await;
+            }
+            vars_del_giro(variabili, i, giri, elementi.as_deref());
+            let (esito, risposta) =
+                esegui_richiesta(root, file, req, variabili, retry, delay, update_snapshots).await;
+            let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
+            if let Some(r) = &risposta {
+                for (k, v) in applica_catture(&passo.catture, r, variabili) {
+                    println!("  ⇲ {k} = {v}");
+                }
+            }
+            let resp = risposta.clone();
+            esiti[i] = Some((esito, risposta));
+            if !ok && ciclo.al_fallimento != "continua" {
+                uscita = "fermato da un giro fallito";
+                break;
+            }
+            if ciclo.esci_se.is_some() && valuta_condizione(&ciclo.esci_se, resp.as_ref(), variabili) {
+                uscita = "condizione di uscita";
+                break;
+            }
+        }
+    } else {
+        // Pool di worker cooperativi: `prossimo` distribuisce gli indici,
+        // `stop` impedisce di avviarne altri. Girano tutti sullo stesso task,
+        // quindi RefCell basta e nessun borrow attraversa un await.
+        let base = variabili.clone();
+        let prossimo = RefCell::new(0usize);
+        let stop = RefCell::new(false);
+        let raccolti: RefCell<Vec<Option<GiroSvolto>>> =
+            RefCell::new((0..giri).map(|_| None).collect());
+        let motivo = RefCell::new("completato");
+
+        let worker = || async {
+            loop {
+                if *stop.borrow() {
+                    return;
+                }
+                let i = {
+                    let mut p = prossimo.borrow_mut();
+                    let i = *p;
+                    *p += 1;
+                    i
+                };
+                if i >= giri {
+                    return;
+                }
+                let mut vg = base.clone();
+                vars_del_giro(&mut vg, i, giri, elementi.as_deref());
+                let (esito, risposta) =
+                    esegui_richiesta(root, file, req, &mut vg, retry, delay, update_snapshots).await;
+                let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
+                if let Some(r) = &risposta {
+                    for (k, v) in applica_catture(&passo.catture, r, &mut vg) {
+                        println!("  ⇲ {k} = {v}");
+                    }
+                }
+                let fine_per_cond = ciclo.esci_se.is_some()
+                    && valuta_condizione(&ciclo.esci_se, risposta.as_ref(), &vg);
+                raccolti.borrow_mut()[i] = Some((esito, risposta, vg));
+                if !ok && ciclo.al_fallimento != "continua" {
+                    *stop.borrow_mut() = true;
+                    *motivo.borrow_mut() = "fermato da un giro fallito";
+                    return;
+                }
+                if fine_per_cond {
+                    *stop.borrow_mut() = true;
+                    *motivo.borrow_mut() = "condizione di uscita";
+                    return;
+                }
+            }
+        };
+        futures::future::join_all((0..conc).map(|_| worker())).await;
+
+        uscita = *motivo.borrow();
+        // Riporta nelle variabili condivise ciò che ogni giro ha scritto,
+        // in ordine di giro: sull'ultimo che ha toccato una chiave vince lui.
+        for (i, slot) in raccolti.borrow_mut().iter_mut().enumerate() {
+            if let Some((esito, risposta, vg)) = slot.take() {
+                for (k, v) in vg {
+                    if !k.starts_with("$loop") {
+                        variabili.insert(k, v);
+                    }
+                }
+                esiti[i] = Some((esito, risposta));
+            }
+        }
+    }
+
+    // Ripulisce le variabili del ciclo: fuori dal giro non hanno senso.
+    variabili.remove("$loopIndex");
+    variabili.remove("$loopCount");
+    variabili.remove("$loopItem");
+
+    // Risposta dell'ultimo giro completato: è quella che i rami in uscita
+    // vedranno. Se quel giro non ha avuto risposta si tiene la precedente.
+    let ultima: Option<Risposta> = esiti
+        .iter()
+        .rev()
+        .flatten()
+        .next()
+        .and_then(|(_, r)| r.clone())
+        .or_else(|| prev.cloned());
+
+    let fatti: Vec<Esito> = esiti.into_iter().flatten().map(|(e, _)| e).collect();
+    let ok_n = fatti
+        .iter()
+        .filter(|e| e.errore.is_none() && e.risultati.iter().all(|x| x.passato))
+        .count();
+    let totale_ms: u128 = fatti.iter().map(|e| e.tempo_ms).sum();
+    let sorgente = if ciclo.sorgente == "foreach" {
+        format!("foreach {}", ciclo.lista)
+    } else {
+        "volte".to_string()
+    };
+    println!(
+        "  ↻ {nome}: {} giri su {giri} ({sorgente}, concorrenza {conc}) · {ok_n} ok · {} falliti · {totale_ms} ms · {uscita}",
+        fatti.len(),
+        fatti.len() - ok_n
+    );
+
+    let ok = !fatti.is_empty() && ok_n == fatti.len();
+    (fatti, ultima, ok)
+}
+
+/// Esegue un passo del flusso: una volta sola, o ripetuto se ha un ciclo.
+/// Applica anche le catture, così i due percorsi restano indistinguibili
+/// per chi chiama.
+#[allow(clippy::too_many_arguments)]
+async fn esegui_passo(
+    root: &Path,
+    file: &str,
+    req: &Richiesta,
+    passo: &Passo,
+    prev: Option<&Risposta>,
+    variabili: &mut HashMap<String, String>,
+    retry: u32,
+    delay: u64,
+    update_snapshots: bool,
+) -> (Vec<Esito>, Option<Risposta>, bool) {
+    if let Some(ciclo) = &passo.ciclo {
+        return esegui_ciclo(
+            root, file, req, passo, ciclo, prev, variabili, retry, delay, update_snapshots,
+        )
+        .await;
+    }
+    let (esito, risposta) =
+        esegui_richiesta(root, file, req, variabili, retry, delay, update_snapshots).await;
+    let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
+    if let Some(r) = &risposta {
+        for (k, v) in applica_catture(&passo.catture, r, variabili) {
+            println!("  ⇲ {k} = {v}");
+        }
+    }
+    (vec![esito], risposta, ok)
+}
+
 /// Esegue un flusso (catena con condizioni/catture): valuta la condizione sulla
 /// risposta precedente (salta il passo), invia, applica le catture, e
 /// prosegue/ferma secondo `al_fallimento`.
@@ -842,17 +1109,14 @@ async fn esegui_flusso(
         };
         let dir = passo.file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
         let req = storage::eredita(root, dir, richiesta);
-        let (esito, risposta) =
-            esegui_richiesta(root, &passo.file, &req, variabili, retry, delay, update_snapshots).await;
-        let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
-        if let Some(r) = &risposta {
-            let fatte = applica_catture(&passo.catture, r, variabili);
-            for (k, v) in &fatte {
-                println!("  ⇲ {k} = {v}");
-            }
+        let (esiti, risposta, ok) = esegui_passo(
+            root, &passo.file, &req, passo, prev.as_ref(), variabili, retry, delay, update_snapshots,
+        )
+        .await;
+        if risposta.is_some() {
             prev = risposta;
         }
-        out.push(esito);
+        out.extend(esiti);
         if !ok && passo.al_fallimento != "continua" {
             break;
         }
@@ -924,7 +1188,16 @@ async fn esegui_grafo(
 
     let per_id: HashMap<&str, &NodoFlusso> =
         catena.nodi.iter().map(|n| (n.id.as_str(), n)).collect();
-    let per_passo: HashMap<&str, &Passo> =
+    // La configurazione si cerca prima per id di nodo (due nodi sulla stessa
+    // richiesta hanno impostazioni proprie) e solo in mancanza per file, che è
+    // come venivano salvati i flussi più vecchi.
+    let passo_per_nodo: HashMap<&str, &Passo> = catena
+        .passi
+        .iter()
+        .filter(|p| !p.nodo.is_empty())
+        .map(|p| (p.nodo.as_str(), p))
+        .collect();
+    let passo_per_file: HashMap<&str, &Passo> =
         catena.passi.iter().map(|p| (p.file.as_str(), p)).collect();
 
     let mut uscite: HashMap<&str, Vec<&ArcoFlusso>> = HashMap::new();
@@ -962,14 +1235,19 @@ async fn esegui_grafo(
         let mut resp: Option<Risposta> = pred_resp.get(id).cloned();
         if !is_start {
             let passo_default;
-            let passo: &Passo = match per_passo.get(nodo.file.as_str()) {
+            let passo: &Passo = match passo_per_nodo
+                .get(nodo.id.as_str())
+                .or_else(|| passo_per_file.get(nodo.file.as_str()))
+            {
                 Some(p) => p,
                 None => {
                     passo_default = Passo {
                         file: nodo.file.clone(),
+                        nodo: nodo.id.clone(),
                         condizione: None,
                         catture: vec![],
                         al_fallimento: String::new(),
+                        ciclo: None,
                     };
                     &passo_default
                 }
@@ -984,17 +1262,13 @@ async fn esegui_grafo(
             };
             let dir = nodo.file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
             let req = storage::eredita(root, dir, richiesta);
-            let (esito, risposta) =
-                esegui_richiesta(root, &nodo.file, &req, variabili, retry, delay, update_snapshots).await;
-            let ok = esito.errore.is_none() && esito.risultati.iter().all(|x| x.passato);
-            if let Some(r) = &risposta {
-                let fatte = applica_catture(&passo.catture, r, variabili);
-                for (k, v) in &fatte {
-                    println!("  ⇲ {k} = {v}");
-                }
-            }
+            let (esiti, risposta, ok) = esegui_passo(
+                root, &nodo.file, &req, passo, pred_resp.get(id), variabili, retry, delay,
+                update_snapshots,
+            )
+            .await;
             resp = risposta;
-            out.push(esito);
+            out.extend(esiti);
             if !ok && passo.al_fallimento != "continua" {
                 break;
             }

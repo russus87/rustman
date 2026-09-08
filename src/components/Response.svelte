@@ -2,40 +2,71 @@
   // Pannello della risposta: mostra status, metriche, corpo, intestazioni ed esiti dei test.
   let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest, onAutoSchema, onSnapshotDiff, onSnapshotAccetta, onSalvaEsempio } = $props();
 
+  import CodeEditor from "./CodeEditor.svelte";
+  import { trasformaJson } from "../lib/json-fmt.js";
+
   let tab = $state("Body"); // Body | Headers | Tests
   let cattura = $state(false); // mostra l'elenco dei campi JSON catturabili
 
-  // Estrae i percorsi "data.items.0.id" → valore dai campi foglia del JSON.
-  function estrai(val, prefix, out) {
+  // Oltre questa dimensione il corpo non viene interpretato per "cattura
+  // campi" e "tabella": richiederebbero di attraversare tutto il JSON, e su
+  // una risposta da decine di MB non varrebbe comunque la pena.
+  const SOGLIA_ANALISI = 4 * 1024 * 1024;
+  // Sotto questa soglia indentare è istantaneo e si fa qui; sopra si passa
+  // dal worker, per non bloccare la finestra.
+  const SOGLIA_FMT_SYNC = 256 * 1024;
+  // Quanti campi mostrare in "cattura campi" e quante righe/colonne in tabella.
+  const MAX_PERCORSI = 300;
+  const MAX_RIGHE_TAB = 500;
+  const CAMPIONE_COLONNE = 200;
+
+  // Il corpo viene interpretato UNA volta sola. Prima "cattura campi" e
+  // "tabella" facevano ciascuno il proprio JSON.parse dell'intero corpo, e la
+  // tabella lo rifaceva a ogni click sull'intestazione per riordinare: su una
+  // risposta da 10 MB erano centinaia di millisecondi a ogni render.
+  const radice = $derived.by(() => {
+    const b = risposta?.body;
+    if (!b || b.length > SOGLIA_ANALISI) return undefined;
+    try { return JSON.parse(b); } catch { return undefined; }
+  });
+  const troppoGrande = $derived(!!risposta?.body && risposta.body.length > SOGLIA_ANALISI);
+
+  // Percorsi "data.items.0.id" → valore delle foglie, fermandosi a `max`:
+  // prima l'elenco veniva costruito per intero (oltre mezzo milione di voci su
+  // una risposta grande) e solo dopo tagliato a 300.
+  function estrai(val, prefix, out, max) {
+    if (out.length >= max) return out;
     if (val === null || typeof val !== "object") { out.push({ path: prefix, value: val }); return out; }
-    if (Array.isArray(val)) val.forEach((v, i) => estrai(v, `${prefix}.${i}`, out));
-    else for (const k of Object.keys(val)) estrai(val[k], prefix ? `${prefix}.${k}` : k, out);
+    if (Array.isArray(val)) {
+      for (let i = 0; i < val.length && out.length < max; i++) estrai(val[i], `${prefix}.${i}`, out, max);
+    } else {
+      for (const k of Object.keys(val)) {
+        if (out.length >= max) break;
+        estrai(val[k], prefix ? `${prefix}.${k}` : k, out, max);
+      }
+    }
     return out;
   }
-  const percorsi = $derived.by(() => {
-    if (!risposta) return [];
-    try { return estrai(JSON.parse(risposta.body), "", []).slice(0, 300); } catch { return []; }
-  });
+  const percorsi = $derived(radice === undefined ? [] : estrai(radice, "", [], MAX_PERCORSI));
 
   // Vista tabella: se il body è un array di oggetti.
   let tabella = $state(false);
   let ordCol = $state(null);
   let ordAsc = $state(true);
   const datiTab = $derived.by(() => {
-    if (!risposta) return null;
-    try {
-      const arr = JSON.parse(risposta.body);
-      if (!Array.isArray(arr) || arr.length === 0 || typeof arr[0] !== "object" || arr[0] === null) return null;
-      const colonne = [...new Set(arr.flatMap((o) => Object.keys(o || {})))].slice(0, 20);
-      let righe = arr.slice(0, 500);
-      if (ordCol) {
-        righe = [...righe].sort((a, b) => {
-          const x = a?.[ordCol], y = b?.[ordCol];
-          return (x > y ? 1 : x < y ? -1 : 0) * (ordAsc ? 1 : -1);
-        });
-      }
-      return { colonne, righe };
-    } catch { return null; }
+    const arr = radice;
+    if (!Array.isArray(arr) || arr.length === 0 || typeof arr[0] !== "object" || arr[0] === null) return null;
+    // Le colonne si ricavano da un campione: scorrere decine di migliaia di
+    // elementi solo per comporre l'intestazione non aggiunge nulla.
+    const colonne = [...new Set(arr.slice(0, CAMPIONE_COLONNE).flatMap((o) => Object.keys(o || {})))].slice(0, 20);
+    let righe = arr.slice(0, MAX_RIGHE_TAB);
+    if (ordCol) {
+      righe = [...righe].sort((a, b) => {
+        const x = a?.[ordCol], y = b?.[ordCol];
+        return (x > y ? 1 : x < y ? -1 : 0) * (ordAsc ? 1 : -1);
+      });
+    }
+    return { colonne, righe, totale: arr.length };
   });
   function ordina(c) {
     if (ordCol === c) ordAsc = !ordAsc; else { ordCol = c; ordAsc = true; }
@@ -48,13 +79,41 @@
   // Quanti test sono passati sul totale.
   const passati = $derived(risultatiTest.filter((t) => t.passato).length);
 
-  // Prova a formattare il corpo come JSON indentato; altrimenti lo lascia grezzo.
-  function formattaBody(testo) {
-    try {
-      return JSON.stringify(JSON.parse(testo), null, 2);
-    } catch {
-      return testo;
+  // ---- Corpo mostrato nell'editor ----
+  // L'indentazione di un corpo grande costa quanto la sua dimensione: sotto
+  // SOGLIA_FMT_SYNC si fa qui (istantanea, nessun lampeggio), sopra la fa il
+  // worker mentre intanto si vede il corpo grezzo.
+  let bodyMostrato = $state("");
+  let formattando = $state(false);
+  let statoBody = $state({ righe: 0, caratteri: 0, ricca: true, aCapo: true, rigaLunga: false });
+  let aCapoBody = $state(true);
+
+  $effect(() => {
+    const b = risposta?.body ?? "";
+    if (!b) { bodyMostrato = ""; formattando = false; return; }
+    if (b.length <= SOGLIA_FMT_SYNC) {
+      try { bodyMostrato = JSON.stringify(JSON.parse(b), null, 2); }
+      catch { bodyMostrato = b; }
+      formattando = false;
+      return;
     }
+    bodyMostrato = b;
+    formattando = true;
+    let vivo = true;
+    trasformaJson(b, "formatta")
+      .then((t) => { if (vivo) bodyMostrato = t; })
+      .catch(() => { /* non è JSON: resta il corpo grezzo */ })
+      .finally(() => { if (vivo) formattando = false; });
+    return () => { vivo = false; };
+  });
+
+  function numero(n) {
+    return n.toLocaleString("it-IT");
+  }
+  function pesoTesto(caratteri) {
+    if (caratteri < 1024) return `${caratteri} car.`;
+    if (caratteri < 1024 * 1024) return `${(caratteri / 1024).toFixed(1)} K car.`;
+    return `${(caratteri / 1048576).toFixed(2)} M car.`;
   }
 
   // Converte i byte in una stringa leggibile (B / KB).
@@ -106,20 +165,31 @@
     </div>
 
     {#if tab === "Body"}
-      {#if percorsi.length > 0 || datiTab}
-        <div class="cap-bar">
-          {#if percorsi.length > 0}
-            <span class="cap-toggle" class:on={cattura} onclick={() => { cattura = !cattura; if (cattura) tabella = false; }}>
-              ⌖ {cattura ? "Mostra corpo" : "Cattura campi"}
-            </span>
+      <div class="cap-bar">
+        {#if percorsi.length > 0}
+          <span class="cap-toggle" class:on={cattura} onclick={() => { cattura = !cattura; if (cattura) tabella = false; }}>
+            ⌖ {cattura ? "Mostra corpo" : "Cattura campi"}
+          </span>
+        {/if}
+        {#if datiTab}
+          <span class="cap-toggle" class:on={tabella} onclick={() => { tabella = !tabella; if (tabella) cattura = false; }}>
+            ▦ {tabella ? "Mostra corpo" : "Tabella"}
+          </span>
+        {/if}
+        {#if !cattura && !tabella}
+          <span class="body-stato">{numero(statoBody.righe)} righe · {pesoTesto(statoBody.caratteri)}</span>
+          {#if formattando}<span class="body-nota">indento…</span>
+          {:else if troppoGrande}
+            <span class="body-nota" title="Sopra i 4 MB il corpo non viene analizzato per cattura campi e tabella: servirebbe attraversarlo tutto a ogni render.">corpo grande · analisi campi off</span>
           {/if}
-          {#if datiTab}
-            <span class="cap-toggle" class:on={tabella} onclick={() => { tabella = !tabella; if (tabella) cattura = false; }}>
-              ▦ {tabella ? "Mostra corpo" : "Tabella"}
-            </span>
-          {/if}
-        </div>
-      {/if}
+          {#if !statoBody.ricca}<span class="body-nota">modalità leggera</span>{/if}
+          {#if statoBody.rigaLunga}<span class="body-nota">riga unica · a capo off</span>{/if}
+          <span class="cap-sp"></span>
+          <label class="body-chk" title="Manda a capo le righe lunghe">
+            <input type="checkbox" bind:checked={aCapoBody} /> a capo
+          </label>
+        {/if}
+      </div>
       {#if tabella && datiTab}
         <div class="resp-code" style="overflow:auto">
           <table class="kv tab-grid">
@@ -130,6 +200,9 @@
               {/each}
             </tbody>
           </table>
+          {#if datiTab.totale > datiTab.righe.length}
+            <div class="tab-nota">Prime {numero(datiTab.righe.length)} righe di {numero(datiTab.totale)}.</div>
+          {/if}
         </div>
       {:else if cattura}
         <div class="resp-code">
@@ -149,10 +222,14 @@
           </table>
         </div>
       {:else}
-        <div class="resp-code">
-          <div class="code">
-            <div class="lines">{formattaBody(risposta.body)}</div>
-          </div>
+        <div class="resp-code" style="display:flex;overflow:hidden">
+          <CodeEditor
+            chiave={risposta}
+            valore={bodyMostrato}
+            onStato={(s) => (statoBody = s)}
+            aCapo={aCapoBody}
+            soloLettura
+          />
         </div>
       {/if}
     {:else if tab === "Headers"}
@@ -238,7 +315,21 @@
     font-size: 11.5px;
   }
   /* Cattura campi dal JSON */
-  .cap-bar { padding: 6px 12px; border-bottom: 1px solid var(--border); }
+  .cap-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+    padding: 6px 12px; border-bottom: 1px solid var(--border);
+  }
+  .cap-sp { flex: 1; }
+  .body-stato { color: var(--txt-faint); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+  .body-nota {
+    color: var(--orange); background: var(--panel-3); white-space: nowrap;
+    border-radius: 4px; padding: 1px 6px; font-size: 10.5px;
+  }
+  .body-chk {
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
+    color: var(--txt-dim); font-size: 11.5px; cursor: pointer;
+  }
+  .tab-nota { padding: 8px 12px; color: var(--txt-faint); font-size: 11.5px; }
   .cap-toggle { cursor: pointer; font-size: 12px; color: var(--txt-dim); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); }
   .cap-toggle:hover, .cap-toggle.on { color: var(--txt); background: var(--panel-3); }
   .cap-tab td { padding: 4px 10px; font-family: var(--mono); font-size: 12px; border-bottom: 1px solid var(--border); }

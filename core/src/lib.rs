@@ -12,6 +12,7 @@ pub mod model;
 pub mod oauth;
 pub mod openapi;
 pub mod perf;
+pub mod perf_pdf;
 pub mod postman;
 pub mod report;
 pub mod security;

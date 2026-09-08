@@ -1122,7 +1122,7 @@ mod tests {
 
         let c = Catena {
             nome: "Flusso Login".into(),
-            passi: vec![Passo { file: "test/login.json".into(), condizione: None, catture: vec![], al_fallimento: String::new() }],
+            passi: vec![Passo { file: "test/login.json".into(), nodo: String::new(), condizione: None, catture: vec![], al_fallimento: String::new(), ciclo: None }],
             nodi: vec![],
             archi: vec![],
         };
