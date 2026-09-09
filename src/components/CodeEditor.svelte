@@ -49,10 +49,17 @@
   // dietro). 4 MB lascia margine anche su webview piu' lente di Chromium;
   // `forzaRicca` permette di riaccenderla comunque.
   const SOGLIA_RICCA = 4 * 1024 * 1024;
-  // Oltre questa lunghezza di riga l'a-capo viene spento da solo: per mandare a
-  // capo CodeMirror deve calcolare le interruzioni su tutta la riga, e su un
-  // JSON compattato da 13 MB (una riga sola) sono ~2 s di blocco al primo
-  // disegno, contro ~50 ms senza a-capo. Torna attivo appena si formatta.
+  // Oltre questa lunghezza di riga l'a-capo *costa*: per mandarla a capo
+  // CodeMirror deve calcolare le interruzioni su tutta la riga, e su un JSON
+  // compattato da 13 MB (una riga sola) sono ~2 s di blocco al primo disegno,
+  // contro ~50 ms senza a-capo.
+  //
+  // Prima l'a-capo si spegneva da solo oltre questa soglia. Era peggio del
+  // problema che risolveva: un XML di 62.000 caratteri su una riga (piccolo,
+  // istantaneo da mandare a capo) diventava una riga sola larga quanto lo
+  // schermo, illeggibile, e la casella "a capo" restava lì a dire il contrario.
+  // Ora decide solo la casella; questa soglia serve a scriverlo nel badge,
+  // così chi ha davvero un corpo enorme sa cosa spegnere se rallenta.
   const MAX_RIGA_ACAPO = 20000;
 
   let contenitore = $state(null);
@@ -61,7 +68,7 @@
                                // documento quando il cambio arriva da noi stessi
   let timer = null;
   let riccaAttiva = null;      // stato corrente della modalita' ricca
-  let acapoAttivo = null;      // a-capo realmente applicato (vedi MAX_RIGA_ACAPO)
+  let acapoAttivo = null;      // a-capo applicato: segue la casella, e basta
   let rigaLunga = false;       // c'e' almeno una riga oltre MAX_RIGA_ACAPO
 
   const compAcapo = new Compartment();
@@ -146,7 +153,7 @@
 
   function acapoVoluto(doc) {
     rigaLunga = rigaMassima(doc) > MAX_RIGA_ACAPO;
-    return aCapo && !rigaLunga;
+    return aCapo;
   }
 
   // Stessa domanda ma su una stringa grezza, prima che esista un documento:
@@ -270,7 +277,7 @@
   function nuovoStato(doc) {
     riccaAttiva = ricca(doc.length);
     rigaLunga = rigaLungaTesto(doc);
-    acapoAttivo = aCapo && !rigaLunga;
+    acapoAttivo = aCapo;
     return EditorState.create({ doc, extensions: estensioni() });
   }
 

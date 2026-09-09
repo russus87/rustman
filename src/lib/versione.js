@@ -7,6 +7,14 @@ export const VERSIONE = __VERSIONE__;
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
   {
+    versione: "1.3.2",
+    voci: [
+      "L'a capo del corpo lo decide solo la casella: non si spegne più da solo sulle righe lunghissime, dove serviva di più.",
+      "Il corpo caricato da file viene indentato subito, JSON o XML che sia.",
+      "Formatta e Compatta funzionano anche sull'XML: si toccano solo gli spazi fra i tag, il contenuto degli elementi resta identico.",
+    ],
+  },
+  {
     versione: "1.3.1",
     voci: [
       "Il corpo della richiesta si può caricare da un file (⤒ Da file): si sceglie il JSON dal disco invece di aprirlo altrove e incollarlo.",

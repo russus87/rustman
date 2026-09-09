@@ -19,7 +19,7 @@
 
   import * as api from "../lib/api.js";
   import CodeEditor from "./CodeEditor.svelte";
-  import { trasformaJson } from "../lib/json-fmt.js";
+  import { trasforma, tipoDi } from "../lib/fmt.js";
 
   let tab = $state("Body");
   const tabs = ["Params", "Headers", "Body", "Auth", "Rete", "Tests", "Pre-script", "Post-script", "Codice", "Note", "Esempi"];
@@ -160,23 +160,39 @@
   let fmtInCorso = $state(false);
   let esitoFmt = $state(null); // { ok, testo } mostrato per qualche secondo
 
+  let timerFmt = null;
   function segnalaFmt(ok, testo) {
     esitoFmt = { ok, testo };
-    setTimeout(() => (esitoFmt = null), 3500);
+    // Il timer del messaggio precedente va spento, altrimenti cancella questo.
+    clearTimeout(timerFmt);
+    timerFmt = setTimeout(() => (esitoFmt = null), 3500);
   }
 
-  async function trasformaBody(azione) {
+  // Formatta o compatta il corpo, che sia JSON o XML: il tipo si riconosce dal
+  // primo carattere. L'XML viene solo re-indentato fra un tag e l'altro, il
+  // contenuto degli elementi non si tocca.
+  async function trasformaBody(azione, silenzioso = false) {
     if (fmtInCorso || !bodyEl) return;
     const testo = bodyEl.contenuto();
     if (!testo.trim()) return;
+    const tipo = tipoDi(testo);
+    if (tipo === "ignoto") {
+      if (!silenzioso) segnalaFmt(false, "Non è né JSON né XML: lasciato com'è");
+      return null;
+    }
     fmtInCorso = true;
     const inizio = performance.now();
     try {
-      const out = await trasformaJson(testo, azione);
+      const out = await trasforma(testo, azione, tipo);
       bodyEl.imposta(out);
-      segnalaFmt(true, `${azione === "compatta" ? "Compattato" : "Formattato"} in ${Math.round(performance.now() - inizio)} ms`);
+      const esito = `${tipo === "xml" ? "XML" : "JSON"} ${azione === "compatta" ? "compattato" : "indentato"}`;
+      // Il tempo interessa quando si preme il pulsante; nel messaggio del
+      // caricamento da file sarebbe solo rumore in più su una riga già lunga.
+      if (!silenzioso) segnalaFmt(true, `${esito} in ${Math.round(performance.now() - inizio)} ms`);
+      return esito;
     } catch (e) {
-      segnalaFmt(false, `JSON non valido: ${e?.message ?? e}`);
+      if (!silenzioso) segnalaFmt(false, `${tipo === "xml" ? "XML" : "JSON"} non valido: ${e?.message ?? e}`);
+      return null;
     } finally {
       fmtInCorso = false;
     }
@@ -208,7 +224,11 @@
         return;
       }
       bodyEl.imposta(testo);
-      segnalaFmt(true, `${f.name} caricato (${pesoFile(f.size)})`);
+      // Un corpo esportato da un altro strumento arriva quasi sempre su una
+      // riga sola: indentarlo subito è l'unico modo per poterci lavorare. Se
+      // non è né JSON né XML resta com'è, senza messaggi di errore.
+      const indentato = await trasformaBody("formatta", true);
+      segnalaFmt(true, `${f.name} caricato (${pesoFile(f.size)})${indentato ? ` · ${indentato}` : ""}`);
     } catch (err) {
       segnalaFmt(false, `Lettura fallita: ${err?.message ?? err}`);
     }
@@ -430,7 +450,9 @@
               title="Evidenziazione forzata su un corpo grande. Clicca per tornare alla modalità leggera.">evidenziazione forzata</span>
           {/if}
           {#if statoBody.rigaLunga}
-            <span class="body-lite" title="Il corpo contiene una riga lunghissima (JSON compattato): l'a capo è disattivato perché renderebbe l'editor lento. Premi Formatta per riattivarlo.">riga unica · a capo off</span>
+            <span class="body-lite" title="Il corpo contiene una riga lunghissima (JSON o XML compattato). Con l'a capo acceso il primo disegno può metterci qualche istante: se rallenta, premi Formatta o togli la spunta ad 'a capo'.">
+              riga unica{statoBody.aCapo ? " · l'a capo può rallentare" : ""}
+            </span>
           {/if}
         </span>
       {/if}

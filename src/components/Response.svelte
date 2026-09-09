@@ -3,7 +3,7 @@
   let { risposta, inCorso, errore, risultatiTest = [], avvisiSicurezza = [], onCapturaVar, onCreaTest, onAutoTest, onAutoSchema, onSnapshotDiff, onSnapshotAccetta, onSalvaEsempio } = $props();
 
   import CodeEditor from "./CodeEditor.svelte";
-  import { trasformaJson } from "../lib/json-fmt.js";
+  import { trasforma } from "../lib/fmt.js";
   import { fasiDaJson, fasiDaTesto, riepilogo, fmtMs } from "../lib/fasi.js";
 
   let tab = $state("Body"); // Body | Headers | Fasi | Tests
@@ -121,7 +121,7 @@
     bodyMostrato = b;
     formattando = true;
     let vivo = true;
-    trasformaJson(b, "formatta")
+    trasforma(b, "formatta", "json")
       .then((t) => { if (vivo) bodyMostrato = t; })
       .catch(() => { /* non è JSON: resta il corpo grezzo */ })
       .finally(() => { if (vivo) formattando = false; });
@@ -209,7 +209,11 @@
             <span class="body-nota" title="Sopra i 4 MB il corpo non viene analizzato per cattura campi e tabella: servirebbe attraversarlo tutto a ogni render.">corpo grande · analisi campi off</span>
           {/if}
           {#if !statoBody.ricca}<span class="body-nota">modalità leggera</span>{/if}
-          {#if statoBody.rigaLunga}<span class="body-nota">riga unica · a capo off</span>{/if}
+          {#if statoBody.rigaLunga}
+            <span class="body-nota" title="La risposta ha una riga lunghissima. Con l'a capo acceso il primo disegno può metterci qualche istante: se rallenta, togli la spunta.">
+              riga unica{aCapoBody ? " · l'a capo può rallentare" : ""}
+            </span>
+          {/if}
           <span class="cap-sp"></span>
           <label class="body-chk" title="Manda a capo le righe lunghe">
             <input type="checkbox" bind:checked={aCapoBody} /> a capo
