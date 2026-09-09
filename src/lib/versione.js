@@ -1,9 +1,26 @@
 // Versione dell'app e changelog mostrati nella vista Info.
 
-export const VERSIONE = "1.2.0";
+// Iniettata da Vite da `package.json` (vedi `define` in vite.config.js): scritta
+// a mano qui restava indietro a ogni rilascio in cui ci si dimenticava di lei.
+export const VERSIONE = __VERSIONE__;
 
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
+  {
+    versione: "1.3.1",
+    voci: [
+      "Il corpo della richiesta si può caricare da un file (⤒ Da file): si sceglie il JSON dal disco invece di aprirlo altrove e incollarlo.",
+      "La versione mostrata nell'app non è più scritta a mano: la 1.3.0 si presentava come 1.2.0.",
+    ],
+  },
+  {
+    versione: "1.3.0",
+    voci: [
+      "Incidenza delle fasi: se il servizio dichiara nel corpo quanto è durata ogni tappa del lavoro (\"Step: X completed in N ms\"), la risposta mostra una scheda Fasi con durata e peso di ciascuna sul totale.",
+      "Le stesse fasi sono aggregate su tutto il test di carico (media, min, max, incidenza) e finiscono nel CSV e nel report PDF.",
+      "Duplica richiesta (⧉ nell'albero delle collezioni): la copia nasce accanto all'originale, pronta da modificare.",
+    ],
+  },
   {
     versione: "1.2.0",
     voci: [

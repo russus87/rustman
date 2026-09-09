@@ -182,6 +182,44 @@
     }
   }
 
+  // ---- Corpo caricato da file ----
+  // Serve a non dover aprire il JSON altrove, selezionarlo tutto e incollarlo:
+  // si sceglie il file e finisce nell'editor. `imposta` resta nella cronologia
+  // di CodeMirror, quindi Ctrl+Z riporta indietro il corpo di prima.
+  let fileBody = $state(null);
+  // Oltre questo il corpo non è più una cosa che si guarda in un editor, ed è
+  // quasi sempre il file sbagliato.
+  const MAX_BODY_FILE = 64 * 1024 * 1024;
+
+  async function caricaBodyDaFile(e) {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // così ricaricare lo stesso file rifà scattare change
+    if (!f || !bodyEl) return;
+    if (f.size > MAX_BODY_FILE) {
+      segnalaFmt(false, `${f.name} pesa ${pesoFile(f.size)}: oltre 64 MB non viene caricato`);
+      return;
+    }
+    try {
+      const testo = await f.text();
+      // Un file binario letto come testo diventa una sequenza di caratteri di
+      // sostituzione: meglio dirlo che riempire l'editor di spazzatura.
+      if (testo.includes("\u0000")) {
+        segnalaFmt(false, `${f.name} sembra un file binario: per allegarlo usa form-data`);
+        return;
+      }
+      bodyEl.imposta(testo);
+      segnalaFmt(true, `${f.name} caricato (${pesoFile(f.size)})`);
+    } catch (err) {
+      segnalaFmt(false, `Lettura fallita: ${err?.message ?? err}`);
+    }
+  }
+
+  function pesoFile(byte) {
+    if (byte < 1024) return `${byte} B`;
+    if (byte < 1024 * 1024) return `${(byte / 1024).toFixed(1)} KB`;
+    return `${(byte / 1048576).toFixed(2)} MB`;
+  }
+
   // Numero con separatore di migliaia, per la barra di stato del corpo.
   function numero(n) {
     return n.toLocaleString("it-IT");
@@ -404,12 +442,17 @@
         <label class="body-chk" title="Manda a capo le righe lunghe">
           <input type="checkbox" bind:checked={aCapoBody} /> a capo
         </label>
+        <span class="beautify" onclick={() => fileBody.click()}
+          title="Carica il corpo da un file di testo (JSON, XML, …). Ctrl+Z riporta indietro quello di prima.">⤒ Da file</span>
         <span class="beautify" class:disab={fmtInCorso} onclick={() => trasformaBody("formatta")}
           title="Indenta il JSON (Shift+Alt+F) — eseguito su un thread separato">
           {fmtInCorso ? "Elaboro…" : "Formatta"}
         </span>
         <span class="beautify" class:disab={fmtInCorso} onclick={() => trasformaBody("compatta")}
           title="Rimuove spazi e a capo dal JSON">Compatta</span>
+        <!-- In mezzo alle etichette romperebbe `.beautify + .beautify`. -->
+        <input type="file" style="display:none" bind:this={fileBody} onchange={caricaBodyDaFile}
+          accept=".json,.txt,.xml,.yaml,.yml,.csv,.graphql,.html,.ndjson,text/*,application/json" />
       {/if}
     </div>
     {#if (richiesta.body_mode ?? "raw") === "raw"}
