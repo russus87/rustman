@@ -2,6 +2,7 @@
   // Pannello Performance funzionante: lancia N richieste con un dato grado di
   // concorrenza sulla richiesta corrente e mostra KPI e grafici reali.
   import * as api from "../lib/api.js";
+  import { fmtMs } from "../lib/fasi.js";
 
   let { richiesta, variabili = null } = $props();
 
@@ -16,7 +17,7 @@
   let inCorso = $state(false);
   let errore = $state(null);
   let ris = $state(null); // RisultatoPerf
-  let grafico = $state("Latenza"); // Latenza | Istogramma
+  let grafico = $state("Latenza"); // Latenza | Istogramma | Fasi
   let avanz = $state(null); // ProgressoPerf mentre il test è in corso
   let ultimeOpzioni = $state(null); // opzioni dell'ultimo test (per il report)
   let esportando = $state(false);
@@ -132,6 +133,14 @@
       ...parametri().map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]+/g, "_"), v]),
     ];
     for (const r of riepilogo) righe.push(r.map(esc).join(","));
+    if (fasi.length) {
+      righe.push("");
+      righe.push(["fase", "occorrenze", "ms_medio", "ms_min", "ms_max", "quota_pct"].map(esc).join(","));
+      for (const f of fasi) {
+        righe.push([f.nome, f.occorrenze, f.ms_medio.toFixed(2), f.ms_min.toFixed(2),
+          f.ms_max.toFixed(2), f.quota.toFixed(2)].map(esc).join(","));
+      }
+    }
     righe.push("");
     righe.push(["indice", "latenza_ms"].map(esc).join(","));
     ris.latenze.forEach((l, i) => righe.push([i, l].map(esc).join(",")));
@@ -194,6 +203,18 @@
     }
     return { buckets, min, passo: range / nb };
   }
+
+  // ---- Fasi dichiarate dal servizio ----
+  // Se le risposte raccontano quanto è durata ogni tappa del lavoro, il
+  // backend le aggrega su tutto il test: qui si vede quanto pesa ciascuna sul
+  // tempo di una richiesta. Se non ne parlano, il tab non compare.
+  const fasi = $derived(ris?.fasi ?? []);
+  const fasiSomma = $derived(fasi.reduce((s, f) => s + f.ms_medio, 0));
+  const fasiMax = $derived(Math.max(...fasi.map((f) => f.ms_medio), 0.001));
+  const grafici = $derived(fasi.length ? ["Latenza", "Istogramma", "Fasi"] : ["Latenza", "Istogramma"]);
+  $effect(() => {
+    if (grafico === "Fasi" && fasi.length === 0) grafico = "Latenza";
+  });
 
   const maxLat = $derived(ris ? Math.max(...ris.latenze, 1) : 1);
   const histo = $derived(ris ? istogramma(ris.latenze) : { buckets: [] });
@@ -307,7 +328,7 @@
       </div>
 
       <div class="chart-tabs">
-        {#each ["Latenza", "Istogramma"] as c}
+        {#each grafici as c}
           <div class="ctab" class:active={grafico === c} onclick={() => (grafico = c)}>{c}</div>
         {/each}
       </div>
@@ -331,7 +352,7 @@
             <polyline points={lineaPunti(ris.latenze)} fill="none" stroke="#9b80ff" stroke-width="1.6" />
           </svg>
           <div class="chart-cap">latenza (ms) per richiesta, in ordine di completamento</div>
-        {:else}
+        {:else if grafico === "Istogramma"}
           <svg viewBox="0 0 {W} {H}" width="100%" preserveAspectRatio="none" style="display:block">
             <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="#1e1e2a" />
             <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="#1e1e2a" />
@@ -351,6 +372,35 @@
             {/each}
           </svg>
           <div class="chart-cap">distribuzione delle latenze (numero di richieste per fascia)</div>
+        {:else}
+          <div class="fasi-testa">
+            <span>somma delle fasi <b>{fmtMs(fasiSomma)}</b></span>
+            <span>latenza media <b>{fmtMs(ris.latenza_media)}</b></span>
+            {#if ris.latenza_media > fasiSomma}
+              <span title="Latenza che nessuna fase spiega: rete, attesa in coda, serializzazione.">
+                altro <b>{fmtMs(ris.latenza_media - fasiSomma)}</b>
+              </span>
+            {/if}
+          </div>
+          <div class="fasi-elenco">
+            {#each fasi as f}
+              <div class="fp-voce">
+                <div class="fp-riga">
+                  <span class="fp-nome" title={f.nome}>{f.nome}</span>
+                  <span class="fp-ms">{fmtMs(f.ms_medio)}</span>
+                  <span class="fp-quota" class:top={f.ms_medio === fasiMax}>{f.quota.toFixed(1)}%</span>
+                </div>
+                <div class="fp-barra">
+                  <span class="fp-b" class:top={f.ms_medio === fasiMax} style="width:{(f.ms_medio / fasiMax) * 100}%"></span>
+                </div>
+                <div class="fp-det">{f.occorrenze} risposte · min {fmtMs(f.ms_min)} · max {fmtMs(f.ms_max)}</div>
+              </div>
+            {/each}
+          </div>
+          <div class="chart-cap">
+            media per richiesta delle fasi dichiarate nel corpo della risposta; la
+            percentuale è sulla somma delle medie
+          </div>
         {/if}
       </div>
     {/if}
@@ -424,6 +474,34 @@
   }
   .perc-row b {
     color: var(--txt);
+  }
+  /* Fasi dichiarate dal servizio */
+  .fasi-testa {
+    display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 10px;
+    color: var(--txt-dim); font-size: 12px;
+  }
+  .fasi-testa b { color: var(--txt); font-family: var(--mono); }
+  /* Ogni fase è un blocco su tre righe (nome+numeri, barra, dettaglio): il
+     pannello è stretto e una tabella a colonne fisse ci starebbe male. */
+  .fasi-elenco { display: flex; flex-direction: column; gap: 12px; }
+  .fp-riga { display: flex; align-items: baseline; gap: 10px; }
+  .fp-nome {
+    flex: 1; min-width: 0; color: var(--txt); font-family: var(--mono); font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .fp-barra { margin-top: 4px; }
+  .fp-b {
+    display: block; height: 10px; border-radius: 3px; min-width: 2px;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent)); opacity: .55;
+  }
+  .fp-b.top { opacity: 1; }
+  .fp-ms, .fp-quota {
+    font-family: var(--mono); font-size: 12px; color: var(--txt-dim); white-space: nowrap;
+  }
+  .fp-quota { min-width: 46px; text-align: right; color: var(--txt-faint); }
+  .fp-quota.top { color: var(--txt); font-weight: 600; }
+  .fp-det {
+    margin-top: 4px; color: var(--txt-faint); font-family: var(--mono); font-size: 10.5px;
   }
   .chart-cap {
     color: var(--txt-faint);

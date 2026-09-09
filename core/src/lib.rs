@@ -3,6 +3,7 @@
 pub mod codegen;
 pub mod curl;
 pub mod doc;
+pub mod fasi;
 pub mod git;
 pub mod har;
 pub mod http;

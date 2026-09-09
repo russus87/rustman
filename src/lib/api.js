@@ -110,6 +110,8 @@ export const creaCollezione = (nome) => call("crea_collezione", { nome });
 export const creaCartella = (dirGenitore, nome) =>
   call("crea_cartella", { dirGenitore, nome });
 export const creaRichiesta = (dir, nome) => call("crea_richiesta", { dir, nome });
+// Duplica una richiesta nella stessa cartella; restituisce il percorso della copia.
+export const duplicaRichiesta = (file) => call("duplica_richiesta", { file });
 export const elimina = (file) => call("elimina", { file });
 export const rinominaCartella = (dir, nuovoNome) =>
   call("rinomina_cartella", { dir, nuovoNome });

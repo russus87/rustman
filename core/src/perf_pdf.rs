@@ -8,7 +8,7 @@
 //!
 //! Il PDF prodotto è 1.4, non compresso, una pagina A4 verticale.
 
-use crate::model::RisultatoPerf;
+use crate::model::{FasePerf, RisultatoPerf};
 
 const LARG: f64 = 595.0; // A4 in punti (72 dpi)
 const ALT: f64 = 842.0;
@@ -306,14 +306,94 @@ pub fn genera(
         y -= 12.5;
     }
 
-    // Piede: la percentuale di errori in rosso quando ce ne sono.
+    // Piede della prima pagina: la percentuale di errori in rosso quando ce ne
+    // sono. Va scritto prima dell'eventuale pagina delle fasi, che apre una
+    // tela nuova.
     if r.errori > 0 {
         t.colore_testo(ROSSO);
         let perc = r.errori as f64 / (r.totali.max(1)) as f64 * 100.0;
         t.testo(MARGINE, MARGINE - 12.0, 9.0, true, &format!("{perc:.1}% di richieste in errore"));
     }
 
-    assembla(std::slice::from_ref(&t.c))
+    // Fasi dichiarate dal servizio: solo se le risposte ne parlano. Vanno su
+    // una pagina propria quando qui sotto non ci sta più niente.
+    let mut pagine = Vec::new();
+    if !r.fasi.is_empty() {
+        let servono = 40.0 + r.fasi.len() as f64 * 26.0;
+        if y - servono < MARGINE {
+            pagine.push(std::mem::take(&mut t.c));
+            t = Tela::nuova();
+            y = ALT - MARGINE;
+        } else {
+            y -= 24.0;
+        }
+        sezione_fasi(&mut t, y, utile, &r.fasi);
+    }
+    pagine.push(std::mem::take(&mut t.c));
+
+    assembla(&pagine)
+}
+
+/// Elenco delle fasi con la barra dell'incidenza: quanto pesa ognuna sul tempo
+/// medio complessivo dichiarato dal servizio.
+fn sezione_fasi(t: &mut Tela, mut y: f64, utile: f64, fasi: &[FasePerf]) {
+    t.colore_testo(NERO);
+    t.testo(MARGINE, y, 10.0, true, "Incidenza delle fasi");
+    y -= 13.0;
+    t.colore_testo(GRIGIO);
+    let totale: f64 = fasi.iter().map(|f| f.ms_medio).sum();
+    t.testo(
+        MARGINE,
+        y,
+        8.5,
+        false,
+        &format!(
+            "media per richiesta, dichiarata nel corpo della risposta — totale {}",
+            ms(totale)
+        ),
+    );
+    y -= 18.0;
+
+    // La barra più lunga è la fase che pesa di più: il confronto è a colpo
+    // d'occhio, i numeri esatti stanno a destra.
+    let massima = fasi.iter().map(|f| f.ms_medio).fold(0.0_f64, f64::max).max(0.001);
+    let x_barra = MARGINE + 150.0;
+    let larg_barra = utile - 150.0 - 110.0;
+    for f in fasi {
+        if y < MARGINE + 16.0 {
+            break;
+        }
+        t.colore_testo(NERO);
+        t.testo(MARGINE, y, 9.0, false, &taglia(&f.nome, 30));
+        t.colore_testo(VIOLA);
+        t.rett_pieno(x_barra, y - 2.0, (f.ms_medio / massima * larg_barra).max(1.0), 9.0);
+        t.colore_testo(GRIGIO);
+        t.testo(
+            x_barra + larg_barra + 8.0,
+            y,
+            9.0,
+            false,
+            &format!("{}  {:.1}%", ms(f.ms_medio), f.quota),
+        );
+        y -= 13.0;
+        // Sotto la barra, i valori estremi: dicono se la fase è stabile.
+        if f.occorrenze > 1 {
+            t.colore_testo(GRIGIO);
+            t.testo(
+                MARGINE,
+                y,
+                7.5,
+                false,
+                &format!(
+                    "{} risposte · min {} · max {}",
+                    f.occorrenze,
+                    ms(f.ms_min),
+                    ms(f.ms_max)
+                ),
+            );
+        }
+        y -= 13.0;
+    }
 }
 
 /// Mette insieme gli oggetti PDF e la tabella xref.
@@ -653,6 +733,7 @@ mod test {
             p95: 47,
             p99: 49,
             latenze,
+            fasi: Vec::new(),
         }
     }
 
@@ -668,6 +749,39 @@ mod test {
         let pos: usize = s.rsplit("startxref").next().unwrap().trim()
             .lines().next().unwrap().trim().parse().unwrap();
         assert_eq!(&pdf[pos..pos + 4], b"xref");
+    }
+
+    #[test]
+    fn il_report_racconta_le_fasi_quando_ci_sono() {
+        let mut r = finto(50);
+        r.fasi = vec![
+            FasePerf {
+                nome: "CreateWorkFolderStep".into(),
+                occorrenze: 50,
+                ms_medio: 1097.14,
+                ms_min: 900.0,
+                ms_max: 1300.0,
+                ms_totale: 54857.0,
+                quota: 14.6,
+            },
+            FasePerf {
+                nome: "ToOutProcessStep".into(),
+                occorrenze: 50,
+                ms_medio: 6386.21,
+                ms_min: 6000.0,
+                ms_max: 6900.0,
+                ms_totale: 319310.5,
+                quota: 85.4,
+            },
+        ];
+        let pdf = genera(&r, "Converti", "POST https://api.esempio.it/converti", &[]);
+        assert!(pdf.starts_with(b"%PDF-1.4"));
+        let testo = String::from_utf8_lossy(&pdf);
+        assert!(testo.contains("Incidenza delle fasi"));
+        assert!(testo.contains("ToOutProcessStep"));
+        // Senza fasi quella sezione non deve comparire.
+        let pdf = genera(&finto(50), "Converti", "", &[]);
+        assert!(!String::from_utf8_lossy(&pdf).contains("Incidenza delle fasi"));
     }
 
     #[test]

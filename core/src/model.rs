@@ -645,6 +645,26 @@ pub struct RisultatoPerf {
     pub p99: u128,
     /// Tutte le latenze (ms) in ordine di completamento, per i grafici.
     pub latenze: Vec<u128>,
+    /// Fasi dichiarate dal servizio nel corpo delle risposte, aggregate su
+    /// tutte le richieste del test. Vuoto quando le risposte non ne parlano.
+    #[serde(default)]
+    pub fasi: Vec<FasePerf>,
+}
+
+/// Una fase (tappa interna del servizio) aggregata su tutte le risposte di un
+/// test di carico: serve a vedere quanto pesa ciascuna sul tempo totale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FasePerf {
+    pub nome: String,
+    /// In quante risposte la fase è comparsa.
+    pub occorrenze: usize,
+    pub ms_medio: f64,
+    pub ms_min: f64,
+    pub ms_max: f64,
+    /// Somma di tutte le misure viste (utile per il confronto grezzo).
+    pub ms_totale: f64,
+    /// Percentuale della fase sul tempo medio complessivo delle fasi (0-100).
+    pub quota: f64,
 }
 
 /// Avanzamento di un test di carico mentre è ancora in corso: la UI lo

@@ -1,6 +1,7 @@
 //! Test di performance (carico): esegue molte richieste con un certo grado di
 //! concorrenza e calcola le statistiche di latenza.
 
+use crate::fasi::{self, Accumulatore};
 use crate::http;
 use crate::model::{OpzioniPerf, ProgressoPerf, Richiesta, RisultatoPerf};
 use futures::stream::{self, StreamExt};
@@ -116,17 +117,31 @@ pub async fn esegui(richiesta: &Richiesta, n: usize, concorrenza: usize) -> Risu
     inizia(n, 0);
     let inizio = Instant::now();
 
+    // Le fasi che il servizio dichiara nel corpo delle risposte vengono
+    // sommate qui mano a mano: tenerle tutte per poi aggregarle alla fine
+    // costerebbe, su decine di migliaia di richieste, più del test stesso.
+    let fasi_viste = Arc::new(Mutex::new(Accumulatore::nuovo()));
+
     // Ogni task misura la propria latenza e se la risposta è "ok" (status < 400).
     // `buffer_unordered` tiene in volo al più `concorrenza` richieste alla volta.
     let esiti: Vec<(u128, bool)> = stream::iter(0..n)
-        .map(|_| async {
-            let t = Instant::now();
-            let esito = match http::invia(richiesta).await {
-                Ok(r) => (t.elapsed().as_millis(), r.status < 400),
-                Err(_) => (t.elapsed().as_millis(), false),
-            };
-            registra(esito.0, esito.1);
-            esito
+        .map(|_| {
+            let acc = fasi_viste.clone();
+            async move {
+                let t = Instant::now();
+                let esito = match http::invia(richiesta).await {
+                    Ok(r) => {
+                        // La latenza si ferma qui: l'analisi delle fasi viene
+                        // dopo, altrimenti finirebbe dentro la misura.
+                        let lat = t.elapsed().as_millis();
+                        raccogli_fasi(&acc, &r.body);
+                        (lat, r.status < 400)
+                    }
+                    Err(_) => (t.elapsed().as_millis(), false),
+                };
+                registra(esito.0, esito.1);
+                esito
+            }
         })
         .buffer_unordered(concorrenza)
         .collect()
@@ -137,7 +152,22 @@ pub async fn esegui(richiesta: &Richiesta, n: usize, concorrenza: usize) -> Risu
     let latenze: Vec<u128> = esiti.iter().map(|(l, _)| *l).collect();
     let ok = esiti.iter().filter(|(_, b)| *b).count();
 
-    statistiche(latenze, ok, durata_totale_ms)
+    let mut ris = statistiche(latenze, ok, durata_totale_ms);
+    ris.fasi = fasi_viste.lock().map(|a| a.risultato()).unwrap_or_default();
+    ris
+}
+
+/// Estrae le fasi dal corpo di una risposta e le somma all'accumulatore.
+/// L'analisi avviene dopo che la latenza è stata presa, così non entra nella
+/// misura; sui corpi grandi `fasi::estrai` si ferma da sola.
+fn raccogli_fasi(acc: &Mutex<Accumulatore>, body: &str) {
+    let fasi = fasi::estrai(body);
+    if fasi.is_empty() {
+        return;
+    }
+    if let Ok(mut a) = acc.lock() {
+        a.aggiungi(&fasi);
+    }
 }
 
 /// Esegue un test di carico secondo le opzioni: modo "count" (n richieste) o
@@ -164,6 +194,7 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
     // Nel modo "durata" le richieste non si conoscono in anticipo: l'avanzamento
     // si misura sul tempo trascorso.
     inizia(0, fine.as_millis());
+    let fasi_viste = Arc::new(Mutex::new(Accumulatore::nuovo()));
     let inizio = Instant::now();
     let mut prossimo = Instant::now();
     let mut handles = Vec::new();
@@ -184,11 +215,22 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
         let permesso = sem.clone().acquire_owned().await.unwrap();
         let r = richiesta.clone();
         let offset = inizio.elapsed();
+        let acc = fasi_viste.clone();
         handles.push(tokio::spawn(async move {
             let t = Instant::now();
             let esito = http::invia(&r).await;
             let lat = t.elapsed().as_millis();
-            let ok = matches!(esito, Ok(rr) if rr.status < 400);
+            let ok = match &esito {
+                Ok(rr) => {
+                    // Le risposte del warmup non contano nelle statistiche e
+                    // non contano nemmeno nelle fasi.
+                    if offset >= warmup {
+                        raccogli_fasi(&acc, &rr.body);
+                    }
+                    rr.status < 400
+                }
+                Err(_) => false,
+            };
             registra(lat, ok);
             drop(permesso);
             // Le richieste iniziate durante il warmup non contano.
@@ -214,7 +256,9 @@ pub async fn esegui_cfg(richiesta: &Richiesta, opz: &OpzioniPerf) -> RisultatoPe
     // La finestra di misura è la durata utile (esclusa il warmup).
     let durata_ms = Duration::from_secs(opz.durata_s).as_millis();
     termina();
-    statistiche(latenze, ok, durata_ms)
+    let mut ris = statistiche(latenze, ok, durata_ms);
+    ris.fasi = fasi_viste.lock().map(|a| a.risultato()).unwrap_or_default();
+    ris
 }
 
 /// Aggrega le latenze in statistiche (separata per poterla testare senza rete).
@@ -255,6 +299,7 @@ fn statistiche(latenze: Vec<u128>, ok: usize, durata_totale_ms: u128) -> Risulta
         p95: percentile(&ordinate, 95.0),
         p99: percentile(&ordinate, 99.0),
         latenze,
+        fasi: Vec::new(),
     }
 }
 

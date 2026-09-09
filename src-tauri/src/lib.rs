@@ -495,6 +495,13 @@ fn crea_richiesta(app: tauri::AppHandle, dir: String, nome: String) -> Result<St
     storage::crea_richiesta(&root, &dir, &nome).map_err(|e| e.to_string())
 }
 
+/// Duplica una richiesta nella stessa cartella; restituisce il nuovo percorso.
+#[tauri::command]
+fn duplica_richiesta(app: tauri::AppHandle, file: String) -> Result<String, String> {
+    let root = workspace(&app)?;
+    storage::duplica_richiesta(&root, &file).map_err(|e| e.to_string())
+}
+
 /// Elimina una richiesta dato il suo percorso relativo.
 #[tauri::command]
 fn elimina(app: tauri::AppHandle, file: String) -> Result<(), String> {
@@ -774,6 +781,7 @@ pub fn run() {
             crea_collezione,
             crea_cartella,
             crea_richiesta,
+            duplica_richiesta,
             elimina,
             rinomina_cartella,
             elimina_cartella,

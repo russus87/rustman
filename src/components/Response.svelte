@@ -4,9 +4,11 @@
 
   import CodeEditor from "./CodeEditor.svelte";
   import { trasformaJson } from "../lib/json-fmt.js";
+  import { fasiDaJson, fasiDaTesto, riepilogo, fmtMs } from "../lib/fasi.js";
 
-  let tab = $state("Body"); // Body | Headers | Tests
+  let tab = $state("Body"); // Body | Headers | Fasi | Tests
   let cattura = $state(false); // mostra l'elenco dei campi JSON catturabili
+  let fasiPerDurata = $state(false); // ordina le fasi dalla più lenta
 
   // Oltre questa dimensione il corpo non viene interpretato per "cattura
   // campi" e "tabella": richiederebbero di attraversare tutto il JSON, e su
@@ -48,6 +50,25 @@
     return out;
   }
   const percorsi = $derived(radice === undefined ? [] : estrai(radice, "", [], MAX_PERCORSI));
+
+  // ---- Fasi dichiarate dal servizio ----
+  // Alcune API raccontano nel corpo quanto è durata ogni tappa del lavoro
+  // ("Step: LoadFontStep completed in 349.9064 ms"). Quando ci sono si può dire
+  // quanto pesa ciascuna sul totale; quando non ci sono qui non cambia nulla.
+  const fasi = $derived.by(() => {
+    const b = risposta?.body;
+    if (!b || troppoGrande) return [];
+    return radice === undefined ? fasiDaTesto(b) : fasiDaJson(radice);
+  });
+  const rifasi = $derived(riepilogo(fasi, risposta?.tempo_ms ?? 0));
+  const fasiMostrate = $derived(
+    fasiPerDurata ? [...rifasi.righe].sort((a, b) => b.ms - a.ms) : rifasi.righe,
+  );
+  const fasiMax = $derived(rifasi.piuLenta?.ms || 1);
+  // Se la risposta nuova non dichiara fasi il tab sparisce: si torna al corpo.
+  $effect(() => {
+    if (tab === "Fasi" && fasi.length === 0) tab = "Body";
+  });
 
   // Vista tabella: se il body è un array di oggetti.
   let tabella = $state(false);
@@ -152,6 +173,11 @@
       <div class="rsp-tab" class:active={tab === "Headers"} onclick={() => (tab = "Headers")}>
         Headers <span class="cnt">({risposta.headers.length})</span>
       </div>
+      {#if fasi.length > 0}
+        <div class="rsp-tab" class:active={tab === "Fasi"} onclick={() => (tab = "Fasi")}>
+          Fasi <span class="cnt">({fasi.length})</span>
+        </div>
+      {/if}
       {#if risultatiTest.length > 0}
         <div class="rsp-tab" class:active={tab === "Tests"} onclick={() => (tab = "Tests")}>
           Tests <span class="cnt">({passati}/{risultatiTest.length})</span>
@@ -241,6 +267,40 @@
             {/each}
           </tbody>
         </table>
+      </div>
+    {:else if tab === "Fasi"}
+      <div class="cap-bar">
+        <span class="body-stato">somma delle fasi <b>{fmtMs(rifasi.somma)}</b></span>
+        <span class="body-stato">risposta <b>{fmtMs(risposta.tempo_ms)}</b></span>
+        {#if rifasi.altro > 0 && risposta.tempo_ms > 0}
+          <span class="body-stato" title="Tempo di risposta che nessuna fase spiega: rete, attesa in coda, serializzazione.">
+            altro <b>{fmtMs(rifasi.altro)}</b> ({(rifasi.altro / risposta.tempo_ms * 100).toFixed(1)}%)
+          </span>
+        {/if}
+        <span class="cap-sp"></span>
+        <span class="cap-toggle" class:on={fasiPerDurata} onclick={() => (fasiPerDurata = !fasiPerDurata)}>
+          {fasiPerDurata ? "≡ in ordine" : "↓ per durata"}
+        </span>
+      </div>
+      <div class="resp-code" style="overflow:auto">
+        <table class="kv fasi-tab">
+          <tbody>
+            {#each fasiMostrate as f}
+              <tr>
+                <td class="f-nome" title={f.nome}>{f.nome}</td>
+                <td class="f-barra">
+                  <div class="f-b" class:top={f === rifasi.piuLenta} style="width:{(f.ms / fasiMax) * 100}%"></div>
+                </td>
+                <td class="f-ms">{fmtMs(f.ms)}</td>
+                <td class="f-quota" class:top={f === rifasi.piuLenta}>{f.quota.toFixed(1)}%</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <div class="tab-nota">
+          Tempi dichiarati dal servizio nel corpo della risposta; la percentuale è
+          sulla somma delle fasi.
+        </div>
       </div>
     {:else if tab === "Sicurezza"}
       <div class="resp-code" style="padding:8px 0">
@@ -338,6 +398,23 @@
   .cap-act { white-space: nowrap; text-align: right; }
   .cap-b { cursor: pointer; color: var(--txt-faint); margin-left: 8px; }
   .cap-b:hover { color: var(--accent); }
+  /* Fasi dichiarate dal servizio */
+  .fasi-tab { width: 100%; }
+  .fasi-tab td {
+    padding: 5px 10px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; vertical-align: middle;
+  }
+  .f-nome { color: var(--txt); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .f-barra { width: 100%; }
+  .f-b {
+    height: 9px; border-radius: 3px; min-width: 2px;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    opacity: .55;
+  }
+  .f-b.top { opacity: 1; }
+  .f-ms { color: var(--txt-dim); text-align: right; white-space: nowrap; }
+  .f-quota { color: var(--txt-faint); text-align: right; white-space: nowrap; }
+  .f-quota.top { color: var(--txt); font-weight: 600; }
   .tab-grid th { position: sticky; top: 0; background: var(--panel-2); cursor: pointer; white-space: nowrap; color: var(--txt-dim); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--border); user-select: none; }
   .tab-grid th:hover { color: var(--txt); }
   .tab-grid td { padding: 4px 10px; border-bottom: 1px solid var(--border); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; }

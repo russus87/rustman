@@ -192,6 +192,67 @@ pub fn crea_richiesta(root: &Path, dir: &str, nome: &str) -> io::Result<String> 
     salva_richiesta(root, dir, None, &richiesta)
 }
 
+/// Duplica una richiesta: la copia resta nella stessa cartella e prende il
+/// primo nome libero ("Login (copia)", poi "Login (copia 2)", …). Restituisce
+/// il percorso della copia.
+///
+/// Duplicare una copia riparte dal nome originale — da "Login (copia)" esce
+/// "Login (copia 2)", non "Login (copia) (copia)".
+pub fn duplica_richiesta(root: &Path, file_relativo: &str) -> io::Result<String> {
+    let testo = fs::read_to_string(root.join(file_relativo))?;
+    let mut richiesta: Richiesta = serde_json::from_str(&testo)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    let dir = file_relativo
+        .rsplit_once('/')
+        .map(|(d, _)| d)
+        .unwrap_or_default();
+    let base = base_senza_copia(&richiesta.nome).to_string();
+
+    // Il nome deve essere libero come nome file: due richieste con lo stesso
+    // slug finirebbero nello stesso file e la prima verrebbe sovrascritta.
+    let mut n = 1;
+    let (nome, rel) = loop {
+        let nome = if n == 1 {
+            format!("{base} (copia)")
+        } else {
+            format!("{base} (copia {n})")
+        };
+        let rel = if dir.is_empty() {
+            format!("{}.json", slug(&nome))
+        } else {
+            format!("{}/{}.json", dir, slug(&nome))
+        };
+        if !root.join(&rel).exists() {
+            break (nome, rel);
+        }
+        n += 1;
+    };
+
+    richiesta.nome = nome;
+    let testo = serde_json::to_string_pretty(&richiesta)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    fs::write(root.join(&rel), testo)?;
+    Ok(rel)
+}
+
+/// Toglie un eventuale suffisso "(copia)" / "(copia 3)" dal nome.
+fn base_senza_copia(nome: &str) -> &str {
+    let t = nome.trim_end();
+    let Some(resto) = t.strip_suffix(')') else {
+        return t;
+    };
+    let Some(p) = resto.rfind("(copia") else {
+        return t;
+    };
+    let coda = resto[p + "(copia".len()..].trim();
+    if coda.is_empty() || coda.chars().all(|c| c.is_ascii_digit()) {
+        resto[..p].trim_end()
+    } else {
+        t
+    }
+}
+
 /// Elimina un file (richiesta) dato il suo percorso relativo alla root.
 pub fn elimina(root: &Path, file_relativo: &str) -> io::Result<()> {
     fs::remove_file(root.join(file_relativo))
@@ -998,6 +1059,33 @@ mod tests {
             .iter()
             .any(|n| matches!(n, Nodo::Cartella { dir, .. } if dir == "test/auth"));
         assert!(ha_cartella);
+    }
+
+    #[test]
+    fn duplica_una_richiesta_senza_sovrascrivere() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        crea_collezione(root, "Test").unwrap();
+        let mut r = richiesta("Login");
+        r.url = "https://api/login".into();
+        let file = salva_richiesta(root, "test", None, &r).unwrap();
+
+        let copia = duplica_richiesta(root, &file).unwrap();
+        assert_eq!(copia, "test/login-copia.json");
+        let letta: Richiesta =
+            serde_json::from_str(&fs::read_to_string(root.join(&copia)).unwrap()).unwrap();
+        assert_eq!(letta.nome, "Login (copia)");
+        assert_eq!(letta.url, "https://api/login");
+        // L'originale è ancora al suo posto.
+        assert!(root.join(&file).exists());
+
+        // Duplicare di nuovo non sovrascrive la prima copia, e duplicare una
+        // copia riparte dal nome originale.
+        let seconda = duplica_richiesta(root, &file).unwrap();
+        assert_eq!(seconda, "test/login-copia-2.json");
+        let terza = duplica_richiesta(root, &copia).unwrap();
+        assert_eq!(terza, "test/login-copia-3.json");
+        assert_eq!(conta_richieste(&carica_albero(root).unwrap()[0].figli), 4);
     }
 
     #[test]

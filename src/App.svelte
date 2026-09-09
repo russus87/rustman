@@ -619,10 +619,8 @@
   // ---------------- Collezioni / cartelle ----------------
   async function nuovaCollezione(nome) { await api.creaCollezione(nome); await ricaricaAlbero(); segnaleGit++; }
   async function nuovaCartella(dirGenitore, nome) { await api.creaCartella(dirGenitore, nome); await ricaricaAlbero(); segnaleGit++; }
-  async function nuovaRichiesta(dir, nome) {
-    const rel = await api.creaRichiesta(dir, nome);
-    await ricaricaAlbero();
-    // trova la richiesta appena creata nell'albero e aprila
+  // Cerca una richiesta nell'albero (già ricaricato) e la apre in un tab.
+  function apriDallAlbero(rel) {
     const trova = (figli) => {
       for (const n of figli) {
         if (n.tipo === "richiesta" && n.file === rel) return n;
@@ -630,8 +628,28 @@
       }
       return null;
     };
-    for (const c of albero) { const n = trova(c.figli); if (n) { apriRichiesta(n.file, n.richiesta); break; } }
+    for (const c of albero) { const n = trova(c.figli); if (n) { apriRichiesta(n.file, n.richiesta); return; } }
+  }
+  async function nuovaRichiesta(dir, nome) {
+    const rel = await api.creaRichiesta(dir, nome);
+    await ricaricaAlbero();
+    apriDallAlbero(rel);
     segnaleGit++;
+  }
+  // Duplica una richiesta: la copia nasce accanto all'originale e si apre
+  // subito, che è quasi sempre il motivo per cui la si duplica. Quello che
+  // viene copiato è ciò che sta su disco: le modifiche non ancora salvate del
+  // tab aperto non finiscono nella copia.
+  async function duplicaRichiesta(file) {
+    try {
+      const rel = await api.duplicaRichiesta(file);
+      await ricaricaAlbero();
+      apriDallAlbero(rel);
+      segnaleGit++;
+      logga("ok", `Richiesta duplicata in ${rel}`);
+    } catch (e) {
+      logga("errore", `Duplicazione fallita: ${e}`);
+    }
   }
   async function rinominaCartella(dir, nuovoNome) {
     const nuova = await api.rinominaCartella(dir, nuovoNome);
@@ -863,6 +881,7 @@
           onRinomina={rinominaCartella}
           onEliminaCartella={eliminaCartella}
           onEliminaRichiesta={eliminaRichiesta}
+          onDuplicaRichiesta={duplicaRichiesta}
           onEsporta={esportaCollezione}
           onImporta={importaCollezione}
           onGeneraDoc={esportaDoc}

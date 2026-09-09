@@ -79,6 +79,7 @@
     <span class="m {classeMetodo(nodo.richiesta.metodo)}">{nodo.richiesta.metodo}</span>
     <span class="rname">{nodo.richiesta.nome || "(senza nome)"}</span>
     <span class="pin" class:on={pinnati.includes(nodo.file)} title="Preferito" onclick={(e) => { e.stopPropagation(); azioni.onPin(nodo.file); }}>★</span>
+    <span class="dup" title="Duplica (copia quello che è già salvato su disco)" onclick={(e) => { e.stopPropagation(); azioni.onDuplicaRichiesta(nodo.file); }}>⧉</span>
     <span class="del" title="Elimina" onclick={(e) => { e.stopPropagation(); azioni.onEliminaRichiesta(nodo.file); }}>✕</span>
   </div>
 {/if}
@@ -113,15 +114,21 @@
   .fact.fdel:hover {
     color: var(--red);
   }
-  .del {
+  .del,
+  .dup {
     color: var(--txt-faint);
     opacity: 0;
     padding: 0 4px;
     border-radius: 4px;
     cursor: pointer;
   }
-  .req:hover .del {
+  .req:hover .del,
+  .req:hover .dup {
     opacity: 1;
+  }
+  .dup:hover {
+    color: var(--accent);
+    background: var(--panel-3);
   }
   .pin {
     margin-left: auto;

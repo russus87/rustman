@@ -560,6 +560,15 @@ async fn h_crea_cartella(
     ))
 }
 
+async fn h_duplica_richiesta(
+    State(s): State<Stato>,
+    Json(r): Json<FileReq>,
+) -> Result<Json<String>, Errore> {
+    Ok(Json(
+        storage::duplica_richiesta(&s.root(), &r.file).map_err(err)?,
+    ))
+}
+
 async fn h_elimina(State(s): State<Stato>, Json(r): Json<FileReq>) -> Result<Json<()>, Errore> {
     storage::elimina(&s.root(), &r.file).map_err(err)?;
     Ok(Json(()))
@@ -768,6 +777,7 @@ async fn main() {
         .route("/api/crea_collezione", post(h_crea_collezione))
         .route("/api/crea_cartella", post(h_crea_cartella))
         .route("/api/crea_richiesta", post(h_crea_richiesta))
+        .route("/api/duplica_richiesta", post(h_duplica_richiesta))
         .route("/api/elimina", post(h_elimina))
         .route("/api/rinomina_cartella", post(h_rinomina_cartella))
         .route("/api/elimina_cartella", post(h_elimina_cartella))
