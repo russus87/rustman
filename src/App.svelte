@@ -33,6 +33,7 @@
   import Workflow from "./components/Workflow.svelte";
   import LogPanel from "./components/LogPanel.svelte";
   import Splitter from "./components/Splitter.svelte";
+  import Avvio from "./components/Avvio.svelte";
 
   let vista = $state("collezioni"); // collezioni | git | workspaces | settings
 
@@ -44,7 +45,7 @@
   let catene = $state([]); // catene/flussi (per la dashboard)
   let percorsoWs = $state(""); // path del workspace (per preferiti/filtri salvati)
   async function ricaricaPercorso() {
-    try { percorsoWs = await api.percorsoWorkspace(); } catch { percorsoWs = ""; }
+    try { percorsoWs = await api.percorsoWorkspace(); return null; } catch (e) { percorsoWs = ""; return e; }
   }
 
   // Nome dell'ambiente attivo (per la cronologia).
@@ -72,30 +73,62 @@
   });
 
   // ---------------- Caricamento dati ----------------
+  // Ognuno restituisce l'errore, o null se è andato bene: all'avvio serve alla
+  // schermata di caricamento per dire cosa non è riuscito, gli altri chiamanti
+  // lo ignorano come prima.
   async function ricaricaAlbero() {
-    try { albero = await api.caricaAlbero(); } catch (e) { console.error(e); }
+    try { albero = await api.caricaAlbero(); return null; } catch (e) { console.error(e); return e; }
   }
   async function ricaricaEnvironments() {
     try {
       environments = await api.caricaEnvironments();
       if (ambienteAttivo && !environments.some((e) => e.file === ambienteAttivo)) ambienteAttivo = null;
-    } catch (e) { console.error(e); }
+      return null;
+    } catch (e) { console.error(e); return e; }
   }
   async function ricaricaStoria() {
-    try { storia = await api.caricaStoria(); } catch (e) { console.error(e); }
+    try { storia = await api.caricaStoria(); return null; } catch (e) { console.error(e); return e; }
   }
   async function ricaricaRuns() {
-    try { runs = await api.caricaRuns(); } catch (e) { console.error(e); }
+    try { runs = await api.caricaRuns(); return null; } catch (e) { console.error(e); return e; }
   }
   async function ricaricaCatene() {
-    try { catene = await api.caricaCatene(); } catch (e) { console.error(e); }
+    try { catene = await api.caricaCatene(); return null; } catch (e) { console.error(e); return e; }
   }
   async function pulisciStoria() {
     try { await api.pulisciStoria(); storia = []; } catch (e) { console.error(e); }
   }
+  // ---------------- Schermata di avvio ----------------
+  // Copre l'app finché i dati non sono caricati (Avvio.svelte). I caricamenti
+  // girano in parallelo come prima: la schermata li osserva, non li mette in
+  // fila, e decide lei quando chiudersi.
+  let avvioAperto = $state(true);
+  let passiAvvio = $state([
+    { id: "workspace", etichetta: "Workspace", testo: "Apro il workspace…" },
+    { id: "collezioni", etichetta: "Collezioni", testo: "Carico le collezioni…" },
+    { id: "ambienti", etichetta: "Ambienti", testo: "Carico gli ambienti…" },
+    { id: "flussi", etichetta: "Flussi", testo: "Carico i flussi…" },
+    { id: "cronologia", etichetta: "Cronologia", testo: "Leggo la cronologia…" },
+    { id: "trend", etichetta: "Trend dei test", testo: "Carico il trend dei test…" },
+  ].map((p) => ({ ...p, stato: "attesa", errore: "" })));
+
+  async function passo(id, carica) {
+    const errore = await carica();
+    const p = passiAvvio.find((x) => x.id === id);
+    p.errore = errore ? String(errore?.message ?? errore) : "";
+    p.stato = errore ? "errore" : "ok";
+  }
+
   onMount(async () => {
     applicaTema();
-    await Promise.all([ricaricaAlbero(), ricaricaEnvironments(), ricaricaStoria(), ricaricaRuns(), ricaricaCatene(), ricaricaPercorso()]);
+    await Promise.all([
+      passo("workspace", ricaricaPercorso),
+      passo("collezioni", ricaricaAlbero),
+      passo("ambienti", ricaricaEnvironments),
+      passo("flussi", ricaricaCatene),
+      passo("cronologia", ricaricaStoria),
+      passo("trend", ricaricaRuns),
+    ]);
   });
 
   // ---------------- History / replay ----------------
@@ -1042,6 +1075,10 @@
     </div>
   </div>
 </div>
+
+{#if avvioAperto}
+  <Avvio passi={passiAvvio} onFine={() => (avvioAperto = false)} />
+{/if}
 
 {#if paletteAperta}
   <CommandPalette {comandi} onChiudi={() => (paletteAperta = false)} />

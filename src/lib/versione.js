@@ -7,6 +7,13 @@ export const VERSIONE = __VERSIONE__;
 // Dal più recente al più vecchio. Il primo è la versione attuale.
 export const CHANGELOG = [
   {
+    versione: "1.4.0",
+    voci: [
+      "Schermata di avvio: logo e barra di caricamento mentre si aprono workspace, collezioni, ambienti, flussi e cronologia.",
+      "Se qualcosa non si carica la schermata lo dice e aspetta un Continua, invece di aprire l'app con un albero vuoto senza spiegazioni.",
+    ],
+  },
+  {
     versione: "1.3.2",
     voci: [
       "L'a capo del corpo lo decide solo la casella: non si spegne più da solo sulle righe lunghissime, dove serviva di più.",
